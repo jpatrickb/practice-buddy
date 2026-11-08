@@ -51,7 +51,7 @@ export async function offlineDriftTest(
   const res: Record<'A' | 'B', { m: number; off: number }[]> = { A: [], B: [] };
   let L = 0;
   // coarse latency from first click of part A (media 1.0 s)
-  const first = peakNear(x, sr, play0 + 1 / rate + 0.25, 0.5);
+  const first = peakNear(x, sr, play0 + 1 / rate + 0.15, 0.3);
   L = first.t - (play0 + 1 / rate);
   for (let m = 1; m < secs - 1; m += 1) {
     const part = m % 2 === 1 ? 'A' : 'B';
@@ -77,7 +77,7 @@ export async function offlineDriftTest(
 
 export interface GlitchResult {
   stretcher: StretcherKind; steps: string; pitchHz: { min: number; max: number };
-  gapWindows: number; jumpCount: number; maxJump: number;
+  gapWindows: number; jumpCount: number; maxJump: number; jumpTimes: number[];
 }
 
 /** Sine220 rendered while rate is changed mid-play (1 -> 0.5 -> 1.5 -> 0.75). Checks gaps, discontinuities, pitch. */
@@ -109,15 +109,15 @@ export async function offlineRateChangeTest(
   const gapWindows = rms.filter((r) => r < med * 0.5).length;
   // sine max slope = A*2*pi*f/sr
   const maxSlope = 0.2 * 2 * Math.PI * 220 / sr;
-  let jumpCount = 0, maxJump = 0;
+  let jumpCount = 0, maxJump = 0; const jumpTimes: number[] = [];
   for (let i = Math.round(0.5 * sr); i < x.length; i++) {
-    const d = Math.abs(x[i] - x[i - 1]); if (d > maxJump) maxJump = d; if (d > maxSlope * 3) jumpCount++;
+    const d = Math.abs(x[i] - x[i - 1]); if (d > maxJump) maxJump = d; if (d > maxSlope * 3) { jumpCount++; const t = Math.round((i / sr) * 10) / 10; if (!jumpTimes.includes(t)) jumpTimes.push(t); }
   }
   const hzOK = hz.filter((_, i) => rms[i] > med * 0.5);
   return {
     stretcher, steps: schedule.map(([t, r]) => `${t}s→${r}x`).join(' '),
     pitchHz: { min: Math.min(...hzOK), max: Math.max(...hzOK) },
-    gapWindows, jumpCount, maxJump,
+    gapWindows, jumpCount, maxJump, jumpTimes,
   };
 }
 

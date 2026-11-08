@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:https": "HTTPS=1 vite --host",
     "build": "tsc --noEmit && vite build",
     "fixtures": "bash scripts/make-fixtures.sh",
     "encode": "bash scripts/encode-real.sh",
-    "measure": "node scripts/measure.mjs"
+    "measure": "node scripts/measure.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@soundtouchjs/audio-worklet": "^2.1.1",
@@ -15,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "playwright": "^1.65.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"

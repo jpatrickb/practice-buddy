@@ -109,7 +109,7 @@ export abstract class BaseEngine implements PracticeEngine {
   play(): void {
     if (this._playing) return;
     this.enterPlaybackSession();
-    if (this.ctx.state !== 'running' && 'resume' in this.ctx) void (this.ctx as AudioContext).resume();
+    if (this.ctx instanceof AudioContext && this.ctx.state !== 'running') void this.ctx.resume();
     if (this.anchorPos >= this._duration - 0.05) this.anchorPos = 0;
     const l = this.loop;
     if (l && (this.anchorPos >= l.end)) this.anchorPos = l.start;
