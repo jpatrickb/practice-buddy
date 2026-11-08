@@ -43,12 +43,14 @@ export function DirectionA({ p }: { p: PlayerModel }) {
               <li key={part.id}>
                 <Card className={cn("space-y-3 p-4", isMine && "ring-2 ring-primary", silent && "opacity-70")}>
                   <div className="flex items-center gap-3">
-                    <Switch
-                      checked={m.on}
-                      onCheckedChange={(v) => p.setOn(part.id, v)}
-                      aria-label={`${part.label} on or off`}
-                      className="h-8 w-14 [&_[data-slot=switch-thumb]]:size-6 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-6"
-                    />
+                    <div className="grid h-11 w-14 shrink-0 place-items-center">
+                      <Switch
+                        checked={m.on}
+                        onCheckedChange={(v) => p.setOn(part.id, v)}
+                        aria-label={`${part.label} on or off`}
+                        className="origin-center scale-[1.6]"
+                      />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-lg font-semibold">{part.label}</div>
                       <div className="text-sm text-muted-foreground">

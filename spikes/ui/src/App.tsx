@@ -98,7 +98,7 @@ function DevSwitcher({ dir, setDir }: { dir: DirId; setDir: (d: DirId) => void }
   return (
     <nav
       aria-label="Design direction (dev only)"
-      className="fixed inset-x-0 bottom-0 z-[60] flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       <div className="flex gap-1 rounded-full border bg-popover/95 p-1 shadow-lg backdrop-blur">
         {DIRECTIONS.map((d) => (
