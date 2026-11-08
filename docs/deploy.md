@@ -146,3 +146,53 @@ pnpm dev       # http://localhost:5173
 
 `pnpm seed` creates `.dev.vars` (gitignored) with a random `COOKIE_SIGNING_KEY` if you have none;
 see `.dev.vars.example`. Nothing local touches the real Cloudflare account.
+
+## Optional: GitHub Environments (architect decides)
+
+Not applied and not required. It limits who and what can use the Cloudflare credentials: with
+today's repo-level secrets, anyone who can push a branch can edit a workflow and use them.
+
+**Setup (do this *before* editing the workflows):**
+
+```sh
+REPO=jpatrickb/practice-buddy
+ME_ID=$(gh api users/jpatrickb --jq .id)
+
+# production: required reviewer, deploys from main only
+gh api -X PUT repos/$REPO/environments/production --input - <<JSON
+{"reviewers":[{"type":"User","id":$ME_ID}],
+ "deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+JSON
+gh api -X POST repos/$REPO/environments/production/deployment-branch-policies -f name=main
+
+# preview: no reviewers
+gh api -X PUT repos/$REPO/environments/preview
+
+# Move the secrets (re-enter the values; GitHub never shows them again)
+for s in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TF_STATE_ACCESS_KEY_ID TF_STATE_SECRET_ACCESS_KEY; do
+  gh secret set $s --env production
+done
+gh secret set CLOUDFLARE_API_TOKEN  --env preview   # ideally a token scoped to Workers Scripts: Edit only
+gh secret set CLOUDFLARE_ACCOUNT_ID --env preview
+# then delete the repo-level copies:
+for s in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TF_STATE_ACCESS_KEY_ID TF_STATE_SECRET_ACCESS_KEY; do
+  gh secret delete $s
+done
+```
+
+**Workflow changes** (one line each; apply in the same PR that moves the secrets, otherwise deploys
+lose their credentials):
+
+```yaml
+# deploy.yml, job `deploy`
+    environment: production      # waits for the required reviewer on every deploy
+
+# preview.yml, job `preview`
+    environment: preview
+```
+
+Notes: `DEPLOY_ENABLED` stays a repo-level variable, so the gate still skips jobs before the environment
+is evaluated (no approval prompt when disabled). Every `main` deploy will then need a click from the
+reviewer; if that is too noisy, drop the reviewer but keep the branch restriction. The preview
+environment's secrets can be a separate, preview-only token, which is the real fix for "a PR can
+use the secrets".
