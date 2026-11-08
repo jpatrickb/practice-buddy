@@ -13,3 +13,10 @@ This repository contains only code. No music is stored here.
 See [`docs/adr/`](docs/adr/) for design decisions and [`CLAUDE.md`](CLAUDE.md) for contributor rules.
 
 License: MIT
+
+## Development
+
+```sh
+pnpm install && pnpm seed && pnpm dev   # see docs/deploy.md for the local link and for deployment
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
