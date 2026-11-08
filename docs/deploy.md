@@ -93,7 +93,9 @@ then `wrangler deploy` for production and for the preview worker. If you created
 - `preview.yml` (PRs): `CLOUDFLARE_ENV=preview pnpm build` then
   `wrangler versions upload --preview-alias pr-<N>`, and comments the URL on the PR.
   Previews run as worker `practice-buddy-preview` against `practice-buddy-content-preview`;
-  they cannot touch production content.
+  they cannot touch production content. The workflow pins `--name practice-buddy-preview` and runs
+  for same-repo PRs only. Note that a PR can edit workflow files, so treat repo write access as deploy
+  access; for stronger isolation use a separate token/environment scoped to the preview Worker.
 
 ## API token permissions: what needs what
 
