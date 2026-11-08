@@ -1,7 +1,7 @@
 # Deploying practice-buddy
 
 Everything deploys from GitHub Actions (CLAUDE.md rule 6). Until the one-time steps below are
-done, `deploy.yml` and `preview.yml` **skip cleanly** (green, with a notice), so `main` stays green.
+done and `DEPLOY_ENABLED` is set (step 5), `deploy.yml` and `preview.yml` **skip cleanly**, so `main` stays green.
 
 ## Who owns what
 
@@ -75,7 +75,19 @@ echo "$KEY" | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --env preview    
 
 Prefer a *different* key for preview so preview cookies are worthless against production.
 
-### 5. First deploy
+### 5. Turn deployments on (final bootstrap step)
+
+Every job that touches Cloudflare (`deploy.yml` tofu + wrangler, `preview.yml` upload) is gated on
+the repository **variable** `DEPLOY_ENABLED`, and is skipped until it is `true`. Set it only after
+steps 1-4 are done:
+
+```sh
+gh variable set DEPLOY_ENABLED --body true
+```
+
+(Set it back to anything else, or delete it, to stop all deploys.) The secret-presence check stays as a second guard.
+
+### 6. First deploy
 
 Merge to `main`. `deploy.yml` runs CI, then `tofu apply` (because `infra/` changed in that push),
 then `wrangler deploy` for production and for the preview worker. If you created

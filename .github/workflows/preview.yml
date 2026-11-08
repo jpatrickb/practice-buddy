@@ -14,7 +14,8 @@ concurrency:
 jobs:
   preview:
     # Same-repo PRs only: fork PRs never get secrets, and PR code must not run with them unreviewed.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Also gated on the repo variable DEPLOY_ENABLED (docs/deploy.md): nothing touches Cloudflare until it is 'true'.
+    if: vars.DEPLOY_ENABLED == 'true' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

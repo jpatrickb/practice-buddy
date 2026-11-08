@@ -18,6 +18,8 @@ jobs:
 
   deploy:
     needs: ci
+    # Nothing touches Cloudflare until the architect sets the repo variable DEPLOY_ENABLED=true (docs/deploy.md).
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
