@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env*
+*.log
+.DS_Store
+
+# OpenTofu
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfvars
+
+# Never commit music or real content (CLAUDE.md rule 1)
+*.band/
+*.m4a
+*.mp3
+*.wav
+*.aif
+*.aiff
+*.flac
+*.ogg
+*.opus
+*.webm
+content/
+songs/
