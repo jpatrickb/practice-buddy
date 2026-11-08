@@ -24,3 +24,6 @@ infra/*.tfvars
 *.webm
 content/
 songs/
+
+# Wrangler / Vite
+worker-configuration.d.ts
