@@ -1,5 +1,5 @@
 # ADR-0012: Configurable deployment for self-hosting
-- Status: Proposed
+- Status: Accepted (2026-11-09, architect)
 - Date: 2026-11-09
 
 ## Context

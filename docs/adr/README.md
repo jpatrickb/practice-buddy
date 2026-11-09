@@ -15,11 +15,11 @@ ADRs are **binding**. Read the relevant one before changing anything structural.
 | [0009](0009-iac-and-cicd.md) | IaC and CI/CD | Accepted | OpenTofu for buckets, wrangler for Workers, GitHub Actions only; dev (`develop`) and prod (`main`). |
 | [0010](0010-domain.md) | Domain | Accepted | Prod `practice.jpatrickbeal.com`; dev and PR previews on `*.workers.dev`. |
 | [0011](0011-mvp-scope.md) | MVP scope and UX principles | Accepted | Choir home + player (loop, speed, mixer, focus my part); no sheet music/waveforms/accounts. |
-| [0012](0012-configurable-deployment.md) | Configurable deployment for self-hosting | **Proposed** | One `deployment.json` (domain, dev URL) replaces hardcoded names; a fork changes config, not code; a CI guard keeps it so. |
+| [0012](0012-configurable-deployment.md) | Configurable deployment for self-hosting | **Accepted** | One `deployment.json` (domain, dev URL) replaces hardcoded names; a fork changes config, not code; a CI guard keeps it so. |
 
 ## Adding or amending an ADR
 
-1. Copy [`0000-template.md`](0000-template.md) to the next number, e.g. `0012-short-title.md`
+1. Copy [`0000-template.md`](0000-template.md) to the next number, e.g. `0013-short-title.md`
    (Status, Date, Context, Decision, Consequences).
 2. To change an accepted decision, either write a new ADR that says "Supersedes ADR-00NN" and mark the old one
    `Superseded by ADR-00MM`, or, for small clarifications, append a dated `## Amendment` section to the old ADR.
