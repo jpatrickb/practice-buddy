@@ -27,3 +27,7 @@ songs/
 
 # Wrangler / Vite
 worker-configuration.d.ts
+
+# Playwright
+test-results/
+playwright-report/
