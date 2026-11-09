@@ -89,7 +89,7 @@ REPO=jpatrickb/practice-buddy
 for BRANCH in develop main; do
   gh api -X PUT repos/$REPO/branches/$BRANCH/protection --input - <<'JSON'
 {
-  "required_status_checks": { "strict": true, "contexts": ["ci / checks", "ci / infra"] },
+  "required_status_checks": { "strict": true, "contexts": ["ci / checks", "ci / infra", "ci / e2e"] },
   "enforce_admins": false,
   "required_pull_request_reviews": { "required_approving_review_count": 0 },
   "restrictions": null
