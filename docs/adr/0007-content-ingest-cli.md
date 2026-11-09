@@ -20,3 +20,10 @@ parts:
 ```
 ## Consequences
 - Phase 2 option: an admin web page behind Cloudflare Access, for other conductors.
+
+## As built (2026-11-08, PR #7)
+- Commands: `init-song`, `add-song`, `add-choir`, `add-song-to-choir`, `remove-song-from-choir`, `new-link`, `revoke-link`, `list`. Envs are `--env local|dev|prod` (default dev; prod asks for confirmation).
+- R2 access goes through **wrangler** with the architect's own `wrangler login` (no S3 token).
+- `manifests/index.json` lists song and choir ids for the CLI (wrangler can't list objects). The Worker doesn't use it.
+- Idempotent via deterministic ffmpeg output and content hashes. Re-running uploads nothing new.
+- User guide: `docs/adding-songs.md`.

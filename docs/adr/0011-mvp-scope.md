@@ -20,5 +20,8 @@ Per-part pan, offline/PWA, rehearsal markers, admin web upload, per-song links.
 ## UX principles
 Mobile-first, large touch targets, plain words ("Your part", "Slower/Faster"), no audio jargon in the default view.
 
-## Visual direction (2026-11-08)
-The structure follows prototype A/B (part rows visible). The default shadcn look was rejected as too plain: the app should feel like a real music service. Three styled directions are under review; this ADR will record the pick.
+## Visual direction (2026-11-08, architect ruling)
+**"Fusion"**: Now Playing's structure (large generated cover art with the title centered underneath, frosted-glass panels, song cards with cover thumbnails, two columns on desktop) with Studio's colors (dark base with a blue/violet glow, a distinct color per voice part on its chip, slider, on/off button and meter, a neutral color for accompaniment, and a violet gradient play button that pulses while playing).
+- **No colored left borders or left tints on rows.** The architect rejected that pattern.
+- Dark-only for MVP. A light variant may come later, using the same tokens with darker part colors for contrast.
+- Reference mockup: `spikes/ui-styles/index.html` (Fusion direction).
