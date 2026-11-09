@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { choirManifestSchema, songManifestSchema } from '../../src/shared';
 import * as cmd from './commands';
-import { TARGETS } from './env';
+import type { Deployment } from '../deployment';
+import { targetsFor } from './env';
 import { MemoryStorage } from './storage';
 
 const hasFfmpeg = (() => {
@@ -21,6 +22,11 @@ let root: string;
 let storage: MemoryStorage;
 let out: string[];
 let confirmAnswer = true;
+const DEPLOYMENT: Deployment = {
+  prod: { domain: 'choir.example.org', workersDevUrl: '' },
+  dev: { workersDevUrl: 'https://practice-buddy-dev.example-sub.workers.dev' },
+};
+const TARGETS = targetsFor(DEPLOYMENT);
 const ctx = (env: 'dev' | 'prod' = 'dev', yes = false): cmd.Ctx => ({
   storage,
   target: TARGETS[env],
@@ -309,7 +315,7 @@ describe('choirs and links', () => {
     const url = out
       .join('\n')
       .match(
-        /https:\/\/practice-buddy-dev\.jpatrickbeal\.workers\.dev\/c\/oak\/([A-Za-z0-9_-]{22})/,
+        /https:\/\/practice-buddy-dev\.example-sub\.workers\.dev\/c\/oak\/([A-Za-z0-9_-]{22})/,
       );
     expect(url).not.toBeNull();
     const token = url![1]!;
@@ -329,8 +335,19 @@ describe('choirs and links', () => {
   it('prod links use the prod host', async () => {
     out.length = 0;
     await cmd.newLink(ctx('prod', true), 'oak', undefined);
-    expect(out.join('\n')).toContain('https://practice.jpatrickbeal.com/c/oak/');
+    expect(out.join('\n')).toContain('https://choir.example.org/c/oak/');
     expect(out.join('\n')).toContain('link 2026-11-08');
+  });
+
+  it('prints only the path (and says so) when deployment.json has no address yet', async () => {
+    const empty = targetsFor({
+      prod: { domain: '', workersDevUrl: '' },
+      dev: { workersDevUrl: '' },
+    });
+    await cmd.newLink({ ...ctx(), target: empty.dev }, 'oak', 'NoHost');
+    const text = out.join('\n');
+    expect(text).toMatch(/\n {2}\/c\/oak\/[A-Za-z0-9_-]{22}\n/);
+    expect(text).toContain('deployment.json has no dev workersDevUrl yet');
   });
 
   it('revokes a link by label', async () => {

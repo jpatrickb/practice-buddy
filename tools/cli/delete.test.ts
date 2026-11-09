@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as cmd from './commands';
-import { TARGETS } from './env';
+import { targetsFor } from './env';
 import { MemoryStorage } from './storage';
 
+const TARGETS = targetsFor({
+  prod: { domain: 'choir.example.org', workersDevUrl: '' },
+  dev: { workersDevUrl: 'https://d.example.workers.dev' },
+});
 let storage: MemoryStorage;
 let out: string[];
 let answers: { confirm: boolean; ask: string };

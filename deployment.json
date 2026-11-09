@@ -1,0 +1,9 @@
+{
+  "prod": {
+    "domain": "practice.jpatrickbeal.com",
+    "workersDevUrl": ""
+  },
+  "dev": {
+    "workersDevUrl": "https://practice-buddy-dev.jpatrickbeal.workers.dev"
+  }
+}

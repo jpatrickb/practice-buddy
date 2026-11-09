@@ -20,6 +20,6 @@ resource "cloudflare_r2_bucket" "content_dev" {
 }
 
 # NOT managed here, on purpose:
-#  - Worker custom domain practice.jpatrickbeal.com  -> wrangler.jsonc `routes` (single owner)
+#  - Worker custom domain (deployment.json)          -> injected by vite.config.ts, deployed by wrangler (single owner)
 #  - Worker script and its secrets                   -> wrangler / GitHub Actions
 #  - practice-buddy-tfstate bucket                   -> bootstrapped once by hand (chicken and egg)

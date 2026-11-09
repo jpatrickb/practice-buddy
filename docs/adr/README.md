@@ -15,6 +15,7 @@ ADRs are **binding**. Read the relevant one before changing anything structural.
 | [0009](0009-iac-and-cicd.md) | IaC and CI/CD | Accepted | OpenTofu for buckets, wrangler for Workers, GitHub Actions only; dev (`develop`) and prod (`main`). |
 | [0010](0010-domain.md) | Domain | Accepted | Prod `practice.jpatrickbeal.com`; dev and PR previews on `*.workers.dev`. |
 | [0011](0011-mvp-scope.md) | MVP scope and UX principles | Accepted | Choir home + player (loop, speed, mixer, focus my part); no sheet music/waveforms/accounts. |
+| [0012](0012-configurable-deployment.md) | Configurable deployment for self-hosting | **Proposed** | One `deployment.json` (domain, dev URL) replaces hardcoded names; a fork changes config, not code; a CI guard keeps it so. |
 
 ## Adding or amending an ADR
 

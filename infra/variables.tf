@@ -4,7 +4,7 @@ variable "account_id" {
 }
 
 variable "zone_id" {
-  description = "Zone ID of jpatrickbeal.com. Not used by any resource yet: the Worker custom domain is owned by wrangler.jsonc. Reserved for DNS/Cloudflare Access later."
+  description = "Zone ID of your domain (only if you use a custom domain). Not used by any resource yet: the Worker custom domain is owned by wrangler (see deployment.json). Reserved for DNS/Cloudflare Access later."
   type        = string
   default     = null
 }
