@@ -1,0 +1,2 @@
+# Generate with: openssl rand -hex 32  (the Worker refuses keys shorter than 32 chars)
+COOKIE_SIGNING_KEY=CHANGE_ME
