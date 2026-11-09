@@ -22,7 +22,7 @@ Humans: the Hard rules, Conventions, and Commits/PRs sections apply to you too; 
    require a code change or deploy.
 4. Part labels are free-form. Never hard-code SATB, "organ", "piano", or part counts.
 5. Stay on Cloudflare free tier. Anything that would incur cost needs architect approval.
-6. Deploys happen via GitHub Actions only. No manual `wrangler deploy` to production.
+6. Deploys happen via GitHub Actions only. No manual `wrangler deploy` to production. Sole exception: an emergency rollback in the Cloudflare dashboard with the architect's explicit OK, followed by a revert PR (docs/deploy.md → Rollback and incidents).
 
 ## Architecture (see ADRs)
 ```
