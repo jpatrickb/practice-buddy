@@ -14,8 +14,8 @@
     "run_worker_first": ["/api/*", "/audio/*", "/c/*", "/robots.txt"],
   },
   "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "practice-buddy-content" }],
-  // Production custom domain. Owned by wrangler (see docs/deploy.md); NOT managed in OpenTofu.
-  "routes": [{ "pattern": "practice.jpatrickbeal.com", "custom_domain": true }],
+  // The production custom domain is NOT here: vite.config.ts injects it at build time from
+  // deployment.json (ADR-0012). It is owned by wrangler, not OpenTofu (see docs/deploy.md).
   "env": {
     "dev": {
       "name": "practice-buddy-dev",

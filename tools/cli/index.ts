@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as cmd from './commands';
+import { loadDeployment } from '../deployment';
 import { resolveTarget } from './env';
 import { UserError } from './errors';
 import { WranglerStorage } from './storage';
@@ -56,7 +57,7 @@ async function main() {
   const need = (n: number, usage: string) => {
     if (args.length !== n) throw new UserError(`Usage: pnpm choir ${command} ${usage}`);
   };
-  const target = resolveTarget(values.env);
+  const target = resolveTarget(values.env, loadDeployment(repoRoot));
   const ctx: cmd.Ctx = {
     storage: new WranglerStorage(target, repoRoot),
     target,

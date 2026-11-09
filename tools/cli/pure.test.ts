@@ -10,6 +10,8 @@ import {
   withoutSong,
   withoutToken,
 } from './choir';
+import { parseDeployment } from '../deployment';
+import { targetsFor } from './env';
 import { UserError } from './errors';
 import { buildSongManifest, orderParts, parseSongYaml, titleCase } from './song';
 
@@ -121,5 +123,47 @@ describe('choirs and tokens', () => {
   });
   it('rejects bad choir ids', () => {
     expect(() => newChoir('Bad Id', 'x')).toThrow(UserError);
+  });
+});
+
+describe('deployment config and link hosts (ADR-0012)', () => {
+  const cfg = (
+    prod: { domain: string; workersDevUrl: string },
+    dev = 'https://d.example.workers.dev',
+  ) => ({ prod, dev: { workersDevUrl: dev } });
+  it('prod host is the custom domain when set, else the workers.dev URL, else empty', () => {
+    expect(targetsFor(cfg({ domain: 'choir.example.org', workersDevUrl: '' })).prod.host).toBe(
+      'https://choir.example.org',
+    );
+    expect(
+      targetsFor(cfg({ domain: '', workersDevUrl: 'https://p.example.workers.dev' })).prod.host,
+    ).toBe('https://p.example.workers.dev');
+    expect(targetsFor(cfg({ domain: '', workersDevUrl: '' })).prod.host).toBe('');
+  });
+  it('dev host comes from config; local is fixed', () => {
+    const t = targetsFor(cfg({ domain: '', workersDevUrl: '' }));
+    expect(t.dev.host).toBe('https://d.example.workers.dev');
+    expect(t.local.host).toBe('http://localhost:5173');
+  });
+  it('validates deployment.json', () => {
+    expect(
+      parseDeployment('{"prod":{"domain":"","workersDevUrl":""},"dev":{"workersDevUrl":""}}').prod
+        .domain,
+    ).toBe('');
+    expect(() =>
+      parseDeployment(
+        '{"prod":{"domain":"https://x.org/","workersDevUrl":""},"dev":{"workersDevUrl":""}}',
+      ),
+    ).toThrow(/bare hostname/);
+    expect(() =>
+      parseDeployment(
+        '{"prod":{"domain":"","workersDevUrl":"http://x"},"dev":{"workersDevUrl":""}}',
+      ),
+    ).toThrow(/https/);
+    expect(() => parseDeployment('nope')).toThrow(/valid JSON/);
+  });
+  it('the committed deployment.json is valid', async () => {
+    const { loadDeployment } = await import('../deployment');
+    expect(() => loadDeployment(process.cwd())).not.toThrow();
   });
 });

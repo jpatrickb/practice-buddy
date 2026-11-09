@@ -49,6 +49,7 @@ Open the link `pnpm seed` prints: http://localhost:5173/c/dev-choir/dev-token-de
 | Set up, test, branch, open a PR | [docs/development.md](docs/development.md) |
 | Add or remove a song, make or revoke a choir link | [docs/adding-songs.md](docs/adding-songs.md) |
 | Deploy, bootstrap Cloudflare, understand CI | [docs/deploy.md](docs/deploy.md) |
+| Run my own copy on my own Cloudflare account | [docs/self-hosting.md](docs/self-hosting.md) |
 | Roll back a bad release or handle an incident | [docs/deploy.md#rollback-and-incidents](docs/deploy.md#rollback-and-incidents) |
 | See why a decision was made | [docs/adr/](docs/adr/README.md) |
 | Work on the audio engine | [src/web/audio/README.md](src/web/audio/README.md) |

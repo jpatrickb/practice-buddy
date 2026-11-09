@@ -387,6 +387,11 @@ export async function newLink(ctx: Ctx, choirId: string, label: string | undefin
     `Created link "${finalLabel}" for "${choirId}" on ${ctx.target.name}. Share this URL with the choir:\n`,
   );
   ctx.log(`  ${linkUrl(ctx.target.host, choirId, token)}\n`);
+  if (!ctx.target.host)
+    ctx.log(
+      `deployment.json has no ${ctx.target.name === 'prod' ? 'prod domain or workersDevUrl' : 'dev workersDevUrl'} yet, so this is only the path.\n` +
+        'Put your site address in front of it (e.g. https://<name>.<subdomain>.workers.dev), or set it in deployment.json.',
+    );
   ctx.log(
     "This is the only time the link is shown: only a fingerprint is stored, so it can't be recovered.",
   );

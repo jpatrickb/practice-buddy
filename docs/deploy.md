@@ -5,7 +5,7 @@ Everything deploys from GitHub Actions (CLAUDE.md rule 6). Two environments:
 | | dev | prod |
 |---|---|---|
 | Branch | `develop` | `main` |
-| Worker | `practice-buddy-dev` (workers.dev, no custom domain) | `practice-buddy` at `practice.jpatrickbeal.com` |
+| Worker | `practice-buddy-dev` (workers.dev, no custom domain) | `practice-buddy` at the domain in `deployment.json` (or workers.dev) |
 | R2 bucket | `practice-buddy-content-dev` | `practice-buddy-content` |
 | wrangler | `CLOUDFLARE_ENV=dev` (`env.dev`) | default config |
 
@@ -21,7 +21,7 @@ deploy-approval click. Until the one-time steps below are done and `DEPLOY_ENABL
 | R2 buckets `practice-buddy-content`, `practice-buddy-content-dev` | OpenTofu | `infra/main.tf` |
 | OpenTofu state bucket `practice-buddy-tfstate` | `bootstrap.yml` (run once) | step 3 below |
 | Workers `practice-buddy` (prod), `practice-buddy-dev` (dev + PR previews), R2 bindings | wrangler | `wrangler.jsonc` |
-| Custom domain `practice.jpatrickbeal.com` (and its DNS record + certificate) | **wrangler** (`routes` with `custom_domain`) | `wrangler.jsonc` |
+| Custom domain, if any (and its DNS record + certificate) | **wrangler**; the domain is set in `deployment.json` and injected at build time by `vite.config.ts` | `deployment.json` |
 | Worker secret `COOKIE_SIGNING_KEY` (both Workers) | deploy.yml, from GitHub secrets `COOKIE_SIGNING_KEY_DEV` / `_PROD` | step 2 below |
 
 The custom domain has exactly one owner: wrangler. OpenTofu deliberately does not manage it
@@ -30,7 +30,9 @@ DNS/Access resources and is unused today.
 
 ## One-time bootstrap
 
-You need: the Cloudflare account ID, `gh` logged in with admin access to the repo, and `pnpm install` run.
+Commands below use `$REPO` (your GitHub repo): `export REPO=<owner>/<repo>`.
+
+Running your own copy? Follow [self-hosting.md](self-hosting.md), which wraps these steps for a fork. You need: the Cloudflare account ID, `gh` logged in with admin access to the repo, and `pnpm install` run.
 
 ### 1. Create the Cloudflare API token
 
@@ -40,9 +42,7 @@ for why each is needed):
 - Account · **Workers Scripts** · Edit
 - Account · **Workers R2 Storage** · Edit
 - Account · **Account Settings** · Read
-- Zone (`jpatrickbeal.com` only) · **Workers Routes** · Edit
-- Zone (`jpatrickbeal.com` only) · **DNS** · Edit
-- Zone (`jpatrickbeal.com` only) · **Zone** · Read
+- Only if you use a custom domain: Zone (your domain only) · **Workers Routes** · Edit, **DNS** · Edit, **Zone** · Read
 - User · **User Details** · Read
 - User · **Memberships** · Read
 
@@ -61,17 +61,18 @@ sufficient for both `tofu init`/`apply` against the state bucket and bucket crea
 gh secret set CLOUDFLARE_API_TOKEN          # the token from step 1
 gh secret set CLOUDFLARE_ACCOUNT_ID         # your account id
 
+# (set REPO first: export REPO=<owner>/<repo>)
 # Cookie signing keys (ADR-0006): one per environment, different values, >= 32 chars.
 # deploy.yml uploads the matching one with each deploy; the deploy fails loudly if it is missing.
-openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R jpatrickb/practice-buddy
-openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R jpatrickb/practice-buddy
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R "$REPO"
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R "$REPO"
 ```
 
 ### 3. Run the bootstrap workflow (once; idempotent, safe to re-run)
 
 ```sh
-gh workflow run bootstrap.yml -R jpatrickb/practice-buddy --ref develop
-gh run watch -R jpatrickb/practice-buddy
+gh workflow run bootstrap.yml -R "$REPO" --ref develop
+gh run watch -R "$REPO"
 ```
 
 `bootstrap.yml` is manual-only (not gated on `DEPLOY_ENABLED`). It creates the OpenTofu state bucket
@@ -85,7 +86,7 @@ human and all PRs are authored under their account (GitHub does not let you appr
 architect's approval is given to the tech lead, who merges.
 
 ```sh
-REPO=jpatrickb/practice-buddy
+# REPO=<owner>/<repo>, e.g. your fork
 for BRANCH in develop main; do
   gh api -X PUT repos/$REPO/branches/$BRANCH/protection --input - <<'JSON'
 {
@@ -120,7 +121,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    because `infra/` has not changed since it was first merged, and the deploy would then fail on the missing
    R2 buckets):
    ```sh
-   gh workflow run deploy.yml -R jpatrickb/practice-buddy --ref develop -f apply_infra=true
+   gh workflow run deploy.yml -R "$REPO" --ref develop -f apply_infra=true
    ```
    It runs CI, `tofu apply` (creates both R2 content buckets) and deploys `practice-buddy-dev`. Later runs
    apply infra only when `infra/` changed in the push; use the same dispatch to force it. Applying again from
@@ -147,7 +148,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 **Prod**
 
 4. Merge `develop` → `main` (PR). `deploy.yml` deploys `practice-buddy` to
-   `practice.jpatrickbeal.com`.
+   the configured domain.
 5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the CLI steps from the dev section with `--env prod`
    (see [adding-songs.md](adding-songs.md)).
 
@@ -169,7 +170,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 | Account · Workers Scripts · Edit | `wrangler deploy` (incl. `--secrets-file`), `wrangler versions upload` |
 | Account · Workers R2 Storage · Edit | `tofu apply` creating/updating the R2 buckets; wrangler R2 bindings on deploy |
 | Account · Account Settings · Read | wrangler resolving the account / workers.dev subdomain |
-| Zone · Workers Routes · Edit | attaching the custom domain `practice.jpatrickbeal.com` on deploy |
+| Zone · Workers Routes · Edit | attaching the custom domain from `deployment.json` on deploy (custom domain only) |
 | Zone · DNS · Edit | wrangler creating the custom-domain DNS record |
 | Zone · Zone · Read | wrangler looking up the zone for the custom domain |
 | User · User Details · Read, Memberships · Read | wrangler's account lookup (`whoami`) when only a token is provided |
