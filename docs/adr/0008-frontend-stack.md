@@ -8,3 +8,6 @@
 - Theming: shadcn CSS variables; light/dark/system; 3–4 accent presets; choice saved in localStorage.
 - Worker: Hono. Zod schemas shared from `src/shared/`.
 - Not Next.js: there is no SSR need, and it brings extra runtime weight.
+
+## Amendment (2026-11-08)
+2026-11-08: MVP ships dark-only (Fusion); light mode and accent presets deferred to roadmap 'Later'; implementing them requires amending this ADR.

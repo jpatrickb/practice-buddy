@@ -24,5 +24,5 @@ Parts must stay sample-locked for minutes, and the speed range is 0.5x–1.5x wi
 - **Stretcher: Signalsmith Stretch** (MIT). SoundTouch was rejected: discontinuities on rate change, 10–20 ms transient wobble, ~100 ms latency.
 - **AudioContext sample rate: 24 kHz, mono parts.** 6-part song ≈ 123 MB decoded (vs 226 MB at 44.1 kHz). The architect heard no quality difference.
 - **Graph amendment:** Signalsmith stretches buffers held inside its worklet, so all N parts are loaded as N channels of ONE stretcher node, and per-part gains sit *after* it (ChannelSplitter → Gain_i → master). It is still one shared timing state, so there's no drift.
-- AudioWorklet requires a secure context. Local phone testing uses `pnpm dev:https`, and production is HTTPS.
+- AudioWorklet requires a secure context. The spike used `pnpm dev:https` (spikes/audio-engine); for the app, test phones on the dev site or PR previews (HTTPS), or note that localhost is a secure context. Production is HTTPS.
 - Still to verify on real devices: iPhone peak memory, silent switch, CPU with 6 stretched channels.
