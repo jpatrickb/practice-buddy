@@ -12,17 +12,17 @@ Everything deploys from GitHub Actions (CLAUDE.md rule 6). Two environments:
 PRs (same-repo) run CI, then upload a preview *version* of the dev Worker with alias `pr-<n>`
 (URL commented on the PR). The architect's PR approval is the approval; there is no separate
 deploy-approval click. Until the one-time steps below are done and `DEPLOY_ENABLED` is set
-(step 6), `deploy.yml` and the preview job **skip**, so branches stay green.
+(step 5), `deploy.yml` and the preview job **skip**, so branches stay green.
 
 ## Who owns what
 
 | Thing | Owner | Where |
 |---|---|---|
 | R2 buckets `practice-buddy-content`, `practice-buddy-content-dev` | OpenTofu | `infra/main.tf` |
-| OpenTofu state bucket `practice-buddy-tfstate` | You, once, by hand | step 1 below |
+| OpenTofu state bucket `practice-buddy-tfstate` | `bootstrap.yml` (run once) | step 3 below |
 | Workers `practice-buddy` (prod), `practice-buddy-dev` (dev + PR previews), R2 bindings | wrangler | `wrangler.jsonc` |
 | Custom domain `practice.jpatrickbeal.com` (and its DNS record + certificate) | **wrangler** (`routes` with `custom_domain`) | `wrangler.jsonc` |
-| Worker secret `COOKIE_SIGNING_KEY` (both Workers) | deploy.yml, from GitHub secrets `COOKIE_SIGNING_KEY_DEV` / `_PROD` | step 3 below |
+| Worker secret `COOKIE_SIGNING_KEY` (both Workers) | deploy.yml, from GitHub secrets `COOKIE_SIGNING_KEY_DEV` / `_PROD` | step 2 below |
 
 The custom domain has exactly one owner: wrangler. OpenTofu deliberately does not manage it
 (two owners would fight over the DNS record). `zone_id` exists as a tofu variable only for future
@@ -32,19 +32,7 @@ DNS/Access resources and is unused today.
 
 You need: the Cloudflare account ID, `gh` logged in with admin access to the repo, and `pnpm install` run.
 
-### 1. Create the OpenTofu state bucket (chicken-and-egg: tofu cannot create its own state store)
-
-```sh
-# Create the bucket (any wrangler login that can edit R2, or use the dashboard: R2 -> Create bucket)
-pnpm exec wrangler r2 bucket create practice-buddy-tfstate
-```
-
-Then in the dashboard: **R2 → Manage R2 API Tokens → Create API token**, permission
-**Object Read & Write**, scoped to the bucket `practice-buddy-tfstate` only. Copy the
-*Access Key ID* and *Secret Access Key* (these are S3-style credentials, separate from the
-Cloudflare API token in step 2).
-
-### 2. Create the Cloudflare API token
+### 1. Create the Cloudflare API token
 
 Dashboard → My Profile → API Tokens → Create Custom Token. Permissions (see the table below
 for why each is needed):
@@ -60,13 +48,18 @@ for why each is needed):
 
 Scope the account permissions to this one account and the zone permissions to the one zone.
 
-### 3. Add the GitHub secrets
+This one token is also the OpenTofu **state credential**. R2's S3 API accepts API-token-derived
+credentials (Access Key ID = the token's id, Secret Access Key = SHA-256 hex of the token value;
+[Cloudflare R2 docs](https://developers.cloudflare.com/r2/api/tokens/)), and `deploy.yml` derives and
+masks them at run time, so there are no separate state secrets. This requires R2 *admin* access on the
+token (Workers R2 Storage: Edit). If `tofu init` reports `AccessDenied`, also add the permission
+*Workers R2 Storage Bucket Item Write*.
+
+### 2. Add the GitHub secrets
 
 ```sh
-gh secret set CLOUDFLARE_API_TOKEN          # the token from step 2
+gh secret set CLOUDFLARE_API_TOKEN          # the token from step 1
 gh secret set CLOUDFLARE_ACCOUNT_ID         # your account id
-gh secret set TF_STATE_ACCESS_KEY_ID        # from step 1
-gh secret set TF_STATE_SECRET_ACCESS_KEY    # from step 1
 
 # Cookie signing keys (ADR-0006): one per environment, different values, >= 32 chars.
 # deploy.yml uploads the matching one with each deploy; the deploy fails loudly if it is missing.
@@ -74,18 +67,22 @@ openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R jpatrickb/practi
 openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R jpatrickb/practice-buddy
 ```
 
-### 4. Delete the stray Worker from the earlier preview experiment
-
-A `practice-buddy-preview` Worker was created before the dev/prod model. Remove it once, either in the
-dashboard (Workers & Pages → practice-buddy-preview → Settings → Delete) or:
+### 3. Run the bootstrap workflow (once; idempotent, safe to re-run)
 
 ```sh
-pnpm exec wrangler delete --name practice-buddy-preview
+gh workflow run bootstrap.yml -R jpatrickb/practice-buddy --ref develop
+gh run watch -R jpatrickb/practice-buddy
 ```
 
-### 5. Branch protection (recommended; not applied by this repo)
+`bootstrap.yml` is manual-only (not gated on `DEPLOY_ENABLED`). It creates the OpenTofu state bucket
+`practice-buddy-tfstate` if missing, and deletes the stray `practice-buddy-preview` Worker from the
+earlier preview experiment if it exists.
 
-The architect's PR approval is the deploy approval, so require it on both branches:
+### 4. Branch protection (recommended; not applied by this repo)
+
+Require a PR and passing CI on both branches. Approvals are set to 0 because the architect is the only
+human and all PRs are authored under their account (GitHub does not let you approve your own PR); the
+architect's approval is given to the tech lead, who merges.
 
 ```sh
 REPO=jpatrickb/practice-buddy
@@ -94,7 +91,7 @@ for BRANCH in develop main; do
 {
   "required_status_checks": { "strict": true, "contexts": ["ci / checks", "ci / infra"] },
   "enforce_admins": false,
-  "required_pull_request_reviews": { "required_approving_review_count": 1 },
+  "required_pull_request_reviews": { "required_approving_review_count": 0 },
   "restrictions": null
 }
 JSON
@@ -103,13 +100,13 @@ done
 
 (Check the exact check names under a PR's "Checks" tab; they are `<caller job> / <called job>`.)
 Anyone with write access can still edit workflows in a PR, which run with the repo secrets. Protection
-plus review is the control for that; a preview-only token is the stronger fix.
+plus review by the tech lead is the control for that; a preview-only token is the stronger fix.
 
-### 6. Turn deployments on, then bootstrap each Worker
+### 5. Turn deployments on, then bring up each environment
 
 Every job that touches Cloudflare (the `deploy` job in `deploy.yml`: tofu + wrangler; the `preview`
 job in `pr.yml`) is gated on the repository **variable** `DEPLOY_ENABLED` and is skipped until it is
-`true`. Set it only after steps 1-5 are done:
+`true`. Set it only after steps 1-4 are done:
 
 ```sh
 gh variable set DEPLOY_ENABLED --body true      # `gh variable delete DEPLOY_ENABLED` stops all deploys
@@ -125,7 +122,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    `tofu import cloudflare_r2_bucket.content_dev <ACCOUNT_ID>/practice-buddy-content-dev/default`
    (and `.content` / `practice-buddy-content` for prod).
 2. The cookie signing key (ADR-0006) is deployed by the workflow from the GitHub secret
-   `COOKIE_SIGNING_KEY_DEV` (set in step 3 above), so there is nothing to do here. Rotating it logs
+   `COOKIE_SIGNING_KEY_DEV` (set in step 2), so there is nothing to do here. Rotating it logs
    everyone out (they just re-open their link). The Worker answers HTTP 500 without a key of at least 32 chars.
    PR preview versions are uploaded to the dev Worker and inherit its secrets (secrets are Worker-level
    and carry over to new versions; not verified against the real account yet).
@@ -175,8 +172,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 | Zone · Zone · Read | wrangler looking up the zone for the custom domain |
 | User · User Details · Read, Memberships · Read | wrangler's account lookup (`whoami`) when only a token is provided |
 
-Not needed by the token: the OpenTofu state bucket (uses the separate R2 S3 credentials), and the
-data in the content bucket (the Worker reads it through its binding).
+Not needed by the token: the data in the content bucket (the Worker reads it through its binding).
 
 > These permissions were derived from Cloudflare's documented requirements and the resources this
 > repo manages; they could not be exercised against the real account yet. If the first deploy fails
