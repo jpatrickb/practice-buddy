@@ -14,6 +14,10 @@ See [`docs/adr/`](docs/adr/) for design decisions and [`CLAUDE.md`](CLAUDE.md) f
 
 License: MIT
 
+## Adding songs and links
+
+See [`docs/adding-songs.md`](docs/adding-songs.md) (`pnpm choir ...`).
+
 ## Development
 
 ```sh

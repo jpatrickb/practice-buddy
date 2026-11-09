@@ -19,6 +19,8 @@ export const songManifestSchema = z.object({
   title: z.string().min(1),
   credits: z.string().optional(),
   durationSec: z.number().positive(),
+  /** Exact length at the master sample rate (ADR-0003 amendment); the engine uses this, not the decoded length. */
+  durationSamples: z.number().int().positive().optional(),
   sampleRate: z.number().int().positive(),
   parts: z.array(partSchema).min(1),
 });
@@ -59,3 +61,12 @@ export type ChoirsResponse = z.infer<typeof choirsResponseSchema>;
 /** R2 key layout (ADR-0005). */
 export const songManifestKey = (songId: string) => `manifests/songs/${songId}.json`;
 export const choirManifestKey = (choirId: string) => `manifests/choirs/${choirId}.json`;
+
+/** CLI-maintained list of ids, because R2 listing is not available through wrangler. */
+export const indexKey = 'manifests/index.json';
+export const indexSchema = z.object({
+  schemaVersion: z.literal(1),
+  songs: z.array(idSchema),
+  choirs: z.array(idSchema),
+});
+export type ContentIndex = z.infer<typeof indexSchema>;
