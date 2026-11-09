@@ -140,6 +140,8 @@ export interface AddSongResult {
   uploaded: string[];
   alreadyThere: string[];
   manifestWritten: boolean;
+  /** Old files no longer referenced (deleted unless dry run). */
+  replaced: string[];
 }
 
 export async function addSong(
@@ -265,6 +267,28 @@ export async function addSong(
       manifestWritten = true;
     }
 
+    // Files of the OLD manifest that the new one no longer uses: delete them, but only after the new
+    // manifest is in place, so nothing ever points at missing audio.
+    const keep = new Set(keys.values());
+    const replaced = (existing?.parts ?? []).filter((p) => !keep.has(p.file));
+    const replacedFailed: string[] = [];
+    for (const old of replaced) {
+      let result = opts.dryRun ? 'replaced (would delete old file)' : 'replaced (old file deleted)';
+      if (!opts.dryRun) {
+        try {
+          await ctx.storage.delete(old.file);
+        } catch {
+          replacedFailed.push(old.file);
+          result = 'replaced (DELETE FAILED)';
+        }
+      }
+      rows.push([old.label, old.kind, String(old.channels), '-', old.file, result]);
+    }
+    if (replacedFailed.length)
+      warnings.push(
+        `Could not delete these old files (they are no longer used, but are still stored):\n    ${replacedFailed.join('\n    ')}`,
+      );
+
     ctx.log('');
     ctx.log(table(rows));
     ctx.log('');
@@ -273,7 +297,7 @@ export async function addSong(
     );
     for (const w of warnings) ctx.log(`Warning: ${w}`);
     if (opts.dryRun) ctx.log(`Dry run on ${ctx.target.name}: nothing was uploaded.`);
-    else if (uploaded.length === 0 && !manifestWritten)
+    else if (uploaded.length === 0 && !manifestWritten && replaced.length === 0)
       ctx.log(`Nothing to do: ${ctx.target.name} is already up to date.`);
     else
       ctx.log(
@@ -281,7 +305,13 @@ export async function addSong(
       );
     if (!opts.dryRun)
       ctx.log(`Next: pnpm choir add-song-to-choir <choir-id> ${song.id} --env ${ctx.target.name}`);
-    return { manifest, uploaded, alreadyThere, manifestWritten };
+    return {
+      manifest,
+      uploaded,
+      alreadyThere,
+      manifestWritten,
+      replaced: replaced.map((p) => p.file),
+    };
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

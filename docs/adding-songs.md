@@ -54,7 +54,7 @@ practice) and `defaultGain: 0.8` (quieter by default). `kind` is `voice` (defaul
 `label` is what singers see, so write it for them ("Part 1", "Piano").
 
 `add-song` checks the files, converts them, and uploads only what is new. Running it again with nothing
-changed uploads nothing, so it is always safe to re-run. To fix a part, re-export it, run `add-song` again.
+changed uploads nothing, so it is always safe to re-run. To fix a part, re-export it, run `add-song` again: re-uploading a changed part removes the old file.
 
 ### Two examples
 
