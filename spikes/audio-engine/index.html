@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audio engine spike</title>
+<style>
+ :root{color-scheme:light dark;font:16px/1.4 system-ui,sans-serif}
+ body{margin:0 auto;max-width:640px;padding:12px 16px 60px}
+ fieldset{margin:10px 0;border-radius:8px}
+ button,select{font:inherit;padding:10px 14px;margin:2px}
+ input[type=range]{width:100%;height:32px}
+ .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+ .part{display:grid;grid-template-columns:90px 1fr auto;gap:8px;align-items:center}
+ pre{white-space:pre-wrap;font-size:12px;margin:0}
+</style></head><body>
+<h1>Audio engine spike</h1>
+<fieldset><legend>1. Engine (choose before loading)</legend>
+ <div class="row">
+  <select id="engine"><option value="signalsmith">Signalsmith Stretch</option><option value="soundtouch">SoundTouch worklet</option><option value="media">&lt;audio&gt; preservesPitch (fallback)</option></select>
+  <select id="sr"><option value="">device rate</option><option value="22050">22.05 kHz</option><option value="24000">24 kHz</option><option value="32000">32 kHz</option><option value="44100">44.1 kHz</option></select>
+ </div>
+</fieldset>
+<fieldset><legend>2. Audio source</legend>
+ <div class="row">
+  <button id="fx">Generated fixtures</button>
+  <button id="dev">Dev-server /audio (AUDIO_DIR)</button>
+  <label>…or files <input id="files" type="file" multiple accept="audio/*"></label>
+ </div>
+ <div id="drop" style="border:2px dashed gray;padding:14px;margin-top:6px;border-radius:8px">or drop audio files here</div>
+ <div id="status"></div>
+</fieldset>
+<fieldset><legend>3. Player</legend>
+ <div class="row"><button id="play">Play</button><button id="pause">Pause</button><button id="back">−10s</button><button id="fwd">+10s</button><span id="time"></span></div>
+ <input id="seek" type="range" min="0" max="1000" value="0">
+ <div class="row">Speed <b id="rateL">1.00x</b> <button id="rateReset">1.0x</button></div>
+ <input id="rate" type="range" min="0.5" max="1.5" step="0.05" value="1">
+ <div class="row"><button id="la">Set A</button><button id="lb">Set B</button><button id="lc">Clear loop</button><span id="loopL">no loop</span></div>
+ <div id="parts"></div>
+</fieldset>
+<fieldset><legend>4. Diagnostics</legend><pre id="diag"></pre></fieldset>
+<fieldset><legend>5. Offline tests (generated fixtures)</legend>
+ <div class="row"><button id="tdrift">Drift 0.5/0.75/1/1.5x</button><button id="trate">Rate-change glitch test (sine220)</button></div>
+ <pre id="tout"></pre>
+</fieldset>
+<script type="module" src="/src/main.ts"></script>
+</body></html>

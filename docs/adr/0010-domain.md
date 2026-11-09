@@ -3,4 +3,4 @@
 - Date: 2026-11-08
 ## Decision
 Production: `practice.jpatrickbeal.com` (Worker custom domain; the zone is already on Cloudflare DNS).
-Preview: the `*.workers.dev` preview URLs.
+Dev: `practice-buddy-dev` on `*.workers.dev`; PR previews are preview versions of the dev Worker (see ADR-0009).
