@@ -12,8 +12,8 @@ const browser = await chromium.launch();
 const problems = [];
 for (const [sn, vp] of Object.entries(sizes)) {
   for (const scheme of ["light", "dark"]) {
-    for (const dir of ["studio", "now", "playlist"]) {
-      if (dir === "studio" && scheme === "light") continue; // Studio is dark-only
+    for (const dir of ["fusion", "studio", "now", "playlist"]) {
+      if ((dir === "studio" || dir === "fusion") && scheme === "light") continue; // dark-only
       const ctx = await browser.newContext({ viewport: vp, colorScheme: scheme, deviceScaleFactor: 2, hasTouch: sn === "phone" });
       const page = await ctx.newPage();
       page.on("console", (m) => m.type() === "error" && !/fonts\.g/.test(m.text()) && problems.push(`console ${dir}: ${m.text()}`));
