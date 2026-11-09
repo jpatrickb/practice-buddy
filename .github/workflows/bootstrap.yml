@@ -51,7 +51,17 @@ jobs:
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/practice-buddy-preview")
           case "$code" in
-            200) pnpm exec wrangler delete --name practice-buddy-preview --force ;;
+            200)
+              # Direct API call: `wrangler delete` also looks up KV, which the token has no permission for.
+              resp=$(curl -sS -X DELETE \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/practice-buddy-preview?force=true")
+              if [ "$(echo "$resp" | jq -r '.success')" != "true" ]; then
+                echo "::error::Delete failed: $(echo "$resp" | jq -c '.errors')"
+                exit 1
+              fi
+              echo "Deleted Worker practice-buddy-preview."
+              ;;
             404) echo "Worker practice-buddy-preview does not exist." ;;
             *) echo "::error::Unexpected HTTP $code checking for the Worker"; exit 1 ;;
           esac
