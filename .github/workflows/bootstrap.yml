@@ -1,0 +1,67 @@
+name: Bootstrap
+
+# Manual, idempotent, safe to re-run. NOT gated on DEPLOY_ENABLED: run it once before enabling deploys.
+#  - creates the OpenTofu state bucket practice-buddy-tfstate if missing
+#  - deletes the stray Worker practice-buddy-preview if it exists
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Require secrets
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are not set."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Create state bucket if missing
+        run: |
+          set -euo pipefail
+          if pnpm exec wrangler r2 bucket list | grep -qE '(^|[^A-Za-z0-9-])practice-buddy-tfstate($|[^A-Za-z0-9-])'; then
+            echo "Bucket practice-buddy-tfstate already exists."
+          else
+            pnpm exec wrangler r2 bucket create practice-buddy-tfstate
+          fi
+
+      - name: Delete stray preview Worker if it exists
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/practice-buddy-preview")
+          case "$code" in
+            200)
+              # Direct API call: `wrangler delete` also looks up KV, which the token has no permission for.
+              resp=$(curl -sS -X DELETE \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/practice-buddy-preview?force=true")
+              if [ "$(echo "$resp" | jq -r '.success')" != "true" ]; then
+                echo "::error::Delete failed: $(echo "$resp" | jq -c '.errors')"
+                exit 1
+              fi
+              echo "Deleted Worker practice-buddy-preview."
+              ;;
+            404) echo "Worker practice-buddy-preview does not exist." ;;
+            *) echo "::error::Unexpected HTTP $code checking for the Worker"; exit 1 ;;
+          esac
