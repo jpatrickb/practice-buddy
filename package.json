@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed-local.ts",
     "choir": "tsx tools/cli/index.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:hardcoding": "tsx tools/check-hardcoding.ts"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

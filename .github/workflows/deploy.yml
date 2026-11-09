@@ -1,6 +1,6 @@
 name: Deploy
 
-# develop -> dev (Worker practice-buddy-dev on workers.dev); main -> prod (practice.jpatrickbeal.com).
+# develop -> dev (Worker practice-buddy-dev on workers.dev); main -> prod (custom domain from deployment.json, if set).
 on:
   push:
     branches: [main, develop]
@@ -113,8 +113,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-        if: env.HAS_CF_SECRETS == 'true'
-      - run: pnpm build
         if: env.HAS_CF_SECRETS == 'true'
       # prod: default wrangler config (Worker practice-buddy + custom domain).
       # dev: CLOUDFLARE_ENV=dev bakes env.dev (Worker practice-buddy-dev + dev bucket, no custom domain).

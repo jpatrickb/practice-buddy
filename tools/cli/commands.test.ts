@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { choirManifestSchema, songManifestSchema } from '../../src/shared';
 import * as cmd from './commands';
-import { TARGETS } from './env';
+import type { Deployment } from '../deployment';
+import { targetsFor } from './env';
 import { MemoryStorage } from './storage';
 
 const hasFfmpeg = (() => {
@@ -21,6 +22,11 @@ let root: string;
 let storage: MemoryStorage;
 let out: string[];
 let confirmAnswer = true;
+const DEPLOYMENT: Deployment = {
+  prod: { domain: 'choir.example.org', workersDevUrl: '' },
+  dev: { workersDevUrl: 'https://practice-buddy-dev.example-sub.workers.dev' },
+};
+const TARGETS = targetsFor(DEPLOYMENT);
 const ctx = (env: 'dev' | 'prod' = 'dev', yes = false): cmd.Ctx => ({
   storage,
   target: TARGETS[env],
@@ -28,6 +34,7 @@ const ctx = (env: 'dev' | 'prod' = 'dev', yes = false): cmd.Ctx => ({
   today: () => '2026-11-08',
   yes,
   confirm: async () => confirmAnswer,
+  ask: async () => '',
 });
 
 /** A song folder of sine WAVs (no real music). `seconds` per part; ids in order. */
@@ -122,6 +129,77 @@ describe.skipIf(!hasFfmpeg)('add-song', () => {
     const r = await cmd.addSong(ctx(), dir);
     expect(r.uploaded).toHaveLength(1);
     expect(r.uploaded[0]).toContain('/part2.');
+  });
+
+  it('re-exporting a part deletes only its old file, after the new manifest is written', async () => {
+    const dir = makeSong('swap', { part1: 2, part2: 2 });
+    const first = await cmd.addSong(ctx(), dir);
+    const [old1, old2] = first.manifest.parts.map((p) => p.file) as [string, string];
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part2.wav'),
+    ]);
+    storage.puts.length = 0;
+    const r = await cmd.addSong(ctx(), dir);
+    expect(r.replaced).toEqual([old2]);
+    expect(storage.deletes).toEqual([old2]);
+    expect(storage.objects.has(old2)).toBe(false);
+    expect(storage.objects.has(old1)).toBe(true); // unchanged part untouched
+    const m = JSON.parse(storage.objects.get('manifests/songs/swap.json')!.toString());
+    expect(m.parts.map((p: { file: string }) => p.file)).not.toContain(old2);
+    for (const p of m.parts) expect(storage.objects.has(p.file)).toBe(true); // nothing points at missing audio
+    expect(out.join('\n')).toContain('replaced (old file deleted)');
+  });
+
+  it('a delete failure for an old file is a warning, not a crash', async () => {
+    const dir = makeSong('swapfail', { part1: 2 });
+    const first = await cmd.addSong(ctx(), dir);
+    storage.failDeleteOf.add(first.manifest.parts[0]!.file);
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part1.wav'),
+    ]);
+    await cmd.addSong(ctx(), dir);
+    expect(out.join('\n')).toContain('DELETE FAILED');
+    expect(out.join('\n')).toContain('Could not delete these old files');
+  });
+
+  it('dry run does not delete old files', async () => {
+    const dir = makeSong('swapdry', { part1: 2 });
+    await cmd.addSong(ctx(), dir);
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part1.wav'),
+    ]);
+    storage.puts.length = 0;
+    await cmd.addSong(ctx(), dir, { dryRun: true });
+    expect(storage.deletes).toEqual([]);
+    expect(storage.puts).toEqual([]);
+    expect(out.join('\n')).toContain('replaced (would delete old file)');
   });
 
   it('dry run uploads nothing', async () => {
@@ -237,7 +315,7 @@ describe('choirs and links', () => {
     const url = out
       .join('\n')
       .match(
-        /https:\/\/practice-buddy-dev\.jpatrickbeal\.workers\.dev\/c\/oak\/([A-Za-z0-9_-]{22})/,
+        /https:\/\/practice-buddy-dev\.example-sub\.workers\.dev\/c\/oak\/([A-Za-z0-9_-]{22})/,
       );
     expect(url).not.toBeNull();
     const token = url![1]!;
@@ -257,8 +335,19 @@ describe('choirs and links', () => {
   it('prod links use the prod host', async () => {
     out.length = 0;
     await cmd.newLink(ctx('prod', true), 'oak', undefined);
-    expect(out.join('\n')).toContain('https://practice.jpatrickbeal.com/c/oak/');
+    expect(out.join('\n')).toContain('https://choir.example.org/c/oak/');
     expect(out.join('\n')).toContain('link 2026-11-08');
+  });
+
+  it('prints only the path (and says so) when deployment.json has no address yet', async () => {
+    const empty = targetsFor({
+      prod: { domain: '', workersDevUrl: '' },
+      dev: { workersDevUrl: '' },
+    });
+    await cmd.newLink({ ...ctx(), target: empty.dev }, 'oak', 'NoHost');
+    const text = out.join('\n');
+    expect(text).toMatch(/\n {2}\/c\/oak\/[A-Za-z0-9_-]{22}\n/);
+    expect(text).toContain('deployment.json has no dev workersDevUrl yet');
   });
 
   it('revokes a link by label', async () => {

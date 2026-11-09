@@ -25,3 +25,6 @@ Mobile-first, large touch targets, plain words ("Your part", "Slower/Faster"), n
 - **No colored left borders or left tints on rows.** The architect rejected that pattern.
 - Dark-only for MVP. A light variant may come later, using the same tokens with darker part colors for contrast.
 - Reference mockup: `spikes/ui-styles/index.html` (Fusion direction).
+
+## Amendment (2026-11-08)
+2026-11-08: MVP ships dark-only (Fusion); light mode and accent presets deferred to roadmap 'Later'; implementing them requires amending this ADR.

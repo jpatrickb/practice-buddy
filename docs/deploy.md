@@ -5,7 +5,7 @@ Everything deploys from GitHub Actions (CLAUDE.md rule 6). Two environments:
 | | dev | prod |
 |---|---|---|
 | Branch | `develop` | `main` |
-| Worker | `practice-buddy-dev` (workers.dev, no custom domain) | `practice-buddy` at `practice.jpatrickbeal.com` |
+| Worker | `practice-buddy-dev` (workers.dev, no custom domain) | `practice-buddy` at the domain in `deployment.json` (or workers.dev) |
 | R2 bucket | `practice-buddy-content-dev` | `practice-buddy-content` |
 | wrangler | `CLOUDFLARE_ENV=dev` (`env.dev`) | default config |
 
@@ -21,7 +21,7 @@ deploy-approval click. Until the one-time steps below are done and `DEPLOY_ENABL
 | R2 buckets `practice-buddy-content`, `practice-buddy-content-dev` | OpenTofu | `infra/main.tf` |
 | OpenTofu state bucket `practice-buddy-tfstate` | `bootstrap.yml` (run once) | step 3 below |
 | Workers `practice-buddy` (prod), `practice-buddy-dev` (dev + PR previews), R2 bindings | wrangler | `wrangler.jsonc` |
-| Custom domain `practice.jpatrickbeal.com` (and its DNS record + certificate) | **wrangler** (`routes` with `custom_domain`) | `wrangler.jsonc` |
+| Custom domain, if any (and its DNS record + certificate) | **wrangler**; the domain is set in `deployment.json` and injected at build time by `vite.config.ts` | `deployment.json` |
 | Worker secret `COOKIE_SIGNING_KEY` (both Workers) | deploy.yml, from GitHub secrets `COOKIE_SIGNING_KEY_DEV` / `_PROD` | step 2 below |
 
 The custom domain has exactly one owner: wrangler. OpenTofu deliberately does not manage it
@@ -30,7 +30,9 @@ DNS/Access resources and is unused today.
 
 ## One-time bootstrap
 
-You need: the Cloudflare account ID, `gh` logged in with admin access to the repo, and `pnpm install` run.
+Commands below use `$REPO` (your GitHub repo): `export REPO=<owner>/<repo>`.
+
+Running your own copy? Follow [self-hosting.md](self-hosting.md), which wraps these steps for a fork. You need: the Cloudflare account ID, `gh` logged in with admin access to the repo, and `pnpm install` run.
 
 ### 1. Create the Cloudflare API token
 
@@ -40,9 +42,7 @@ for why each is needed):
 - Account · **Workers Scripts** · Edit
 - Account · **Workers R2 Storage** · Edit
 - Account · **Account Settings** · Read
-- Zone (`jpatrickbeal.com` only) · **Workers Routes** · Edit
-- Zone (`jpatrickbeal.com` only) · **DNS** · Edit
-- Zone (`jpatrickbeal.com` only) · **Zone** · Read
+- Only if you use a custom domain: Zone (your domain only) · **Workers Routes** · Edit, **DNS** · Edit, **Zone** · Read
 - User · **User Details** · Read
 - User · **Memberships** · Read
 
@@ -61,31 +61,32 @@ sufficient for both `tofu init`/`apply` against the state bucket and bucket crea
 gh secret set CLOUDFLARE_API_TOKEN          # the token from step 1
 gh secret set CLOUDFLARE_ACCOUNT_ID         # your account id
 
+# (set REPO first: export REPO=<owner>/<repo>)
 # Cookie signing keys (ADR-0006): one per environment, different values, >= 32 chars.
 # deploy.yml uploads the matching one with each deploy; the deploy fails loudly if it is missing.
-openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R jpatrickb/practice-buddy
-openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R jpatrickb/practice-buddy
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R "$REPO"
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R "$REPO"
 ```
 
 ### 3. Run the bootstrap workflow (once; idempotent, safe to re-run)
 
 ```sh
-gh workflow run bootstrap.yml -R jpatrickb/practice-buddy --ref develop
-gh run watch -R jpatrickb/practice-buddy
+gh workflow run bootstrap.yml -R "$REPO" --ref develop
+gh run watch -R "$REPO"
 ```
 
 `bootstrap.yml` is manual-only (not gated on `DEPLOY_ENABLED`). It creates the OpenTofu state bucket
 `practice-buddy-tfstate` if missing, and deletes the stray `practice-buddy-preview` Worker from the
 earlier preview experiment if it exists.
 
-### 4. Branch protection (recommended; not applied by this repo)
+### 4. Branch protection
 
-Require a PR and passing CI on both branches. Approvals are set to 0 because the architect is the only
+This is applied on `develop` and `main` (summary in [development.md](development.md#branches-prs-and-releases)); the snippet below is how to reproduce it. It requires a PR and passing CI on both branches. Approvals are set to 0 because the architect is the only
 human and all PRs are authored under their account (GitHub does not let you approve your own PR); the
 architect's approval is given to the tech lead, who merges.
 
 ```sh
-REPO=jpatrickb/practice-buddy
+# REPO=<owner>/<repo>, e.g. your fork
 for BRANCH in develop main; do
   gh api -X PUT repos/$REPO/branches/$BRANCH/protection --input - <<'JSON'
 {
@@ -120,7 +121,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    because `infra/` has not changed since it was first merged, and the deploy would then fail on the missing
    R2 buckets):
    ```sh
-   gh workflow run deploy.yml -R jpatrickb/practice-buddy --ref develop -f apply_infra=true
+   gh workflow run deploy.yml -R "$REPO" --ref develop -f apply_infra=true
    ```
    It runs CI, `tofu apply` (creates both R2 content buckets) and deploys `practice-buddy-dev`. Later runs
    apply infra only when `infra/` changed in the push; use the same dispatch to force it. Applying again from
@@ -134,28 +135,22 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    everyone out (they just re-open their link). The Worker answers HTTP 500 without a key of at least 32 chars.
    PR preview versions are uploaded to the dev Worker and inherit its secrets (secrets are Worker-level
    and carry over to new versions; not verified against the real account yet).
-3. Create the first dev choir and link (until the `choir` CLI exists). You need a song manifest and audio
-   in the dev bucket too; for a smoke test use `pnpm seed`-style fake content, or just an empty choir:
+3. Upload a song and create the first choir and link with the CLI (it uses your `wrangler login`, no extra
+   tokens); the commands are in [adding-songs.md](adding-songs.md):
    ```sh
-   TOKEN=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')     # 32 chars, base64url
-   HASH=$(printf %s "$TOKEN" | shasum -a 256 | cut -d' ' -f1)
-   cat > /tmp/dev-choir.json <<JSON
-   {"schemaVersion":1,"id":"dev-choir","name":"Dev Choir","songs":[],
-    "accessTokens":[{"sha256":"$HASH","label":"first dev link","createdAt":"$(date +%F)"}]}
-   JSON
-   pnpm exec wrangler r2 object put practice-buddy-content-dev/manifests/choirs/dev-choir.json \
-     --remote --file /tmp/dev-choir.json --content-type application/json
-   echo "https://practice-buddy-dev.<your-subdomain>.workers.dev/c/dev-choir/$TOKEN"
+   pnpm choir add-song <folder> --env dev
+   pnpm choir add-choir <choir-id> --name "<Display Name>" --env dev
+   pnpm choir add-song-to-choir <choir-id> <song-id> --env dev
+   pnpm choir new-link <choir-id> --label "Testing" --env dev
    ```
-   Open that link: you should land on the song list. Revoke a link by removing its entry from
-   `accessTokens` (effective within ~60 s).
+   Open the printed link: you should land on the song list. The link is shown only once.
 
 **Prod**
 
 4. Merge `develop` → `main` (PR). `deploy.yml` deploys `practice-buddy` to
-   `practice.jpatrickbeal.com`.
-5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the choir step above against
-   `practice-buddy-content` (id/label of your choice).
+   the configured domain.
+5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the CLI steps from the dev section with `--env prod`
+   (see [adding-songs.md](adding-songs.md)).
 
 ## What the workflows do
 
@@ -175,7 +170,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 | Account · Workers Scripts · Edit | `wrangler deploy` (incl. `--secrets-file`), `wrangler versions upload` |
 | Account · Workers R2 Storage · Edit | `tofu apply` creating/updating the R2 buckets; wrangler R2 bindings on deploy |
 | Account · Account Settings · Read | wrangler resolving the account / workers.dev subdomain |
-| Zone · Workers Routes · Edit | attaching the custom domain `practice.jpatrickbeal.com` on deploy |
+| Zone · Workers Routes · Edit | attaching the custom domain from `deployment.json` on deploy (custom domain only) |
 | Zone · DNS · Edit | wrangler creating the custom-domain DNS record |
 | Zone · Zone · Read | wrangler looking up the zone for the custom domain |
 | User · User Details · Read, Memberships · Read | wrangler's account lookup (`whoami`) when only a token is provided |
@@ -186,11 +181,22 @@ Not needed by the token: the data in the content bucket (the Worker reads it thr
 > repo manages; they could not be exercised against the real account yet. If the first deploy fails
 > with a 403, the error names the missing permission. Add it and re-run the workflow.
 
-## Credentials needed later (not by this PR)
+## Credentials for the `choir` CLI
 
-The `choir` CLI (ADR-0007) uploads audio to R2 through the S3 API from the architect's Mac. That
-needs a *separate* R2 S3 token (Object Read & Write on the two content buckets), kept locally and
-never put in GitHub. It should have an `--env dev|production` choice (ADR-0007), matching the two buckets.
+No tokens are stored anywhere for the CLI. It runs wrangler with your own login: do `pnpm exec wrangler login`
+once on your Mac (see [adding-songs.md](adding-songs.md)). Alternatively set `CLOUDFLARE_API_TOKEN` to a
+short-lived API token limited to R2 for this account. Environments are `--env local|dev|prod`.
+
+## Rollback and incidents
+
+- **Standard:** revert the bad PR on `develop`, open a release PR `develop` → `main`, merge. CI plus deploy takes
+  about 3 minutes.
+- **Emergency only, with the architect's OK:** Cloudflare dashboard → Workers & Pages → `practice-buddy` →
+  Deployments → roll back to the previous version. Then open a revert PR so git matches what is live.
+- **Content problems** (wrong song, a link shared too widely) are fixed with the CLI, not a deploy:
+  `pnpm choir remove-song-from-choir`, `delete-song`, `revoke-link` ([adding-songs.md](adding-songs.md)). They take
+  effect within about a minute.
+- Something looks wrong only on `*.workers.dev`? That is the dev Worker; production is unaffected.
 
 ## Local development
 
