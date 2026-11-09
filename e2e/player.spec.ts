@@ -74,6 +74,25 @@ for (const vp of VIEWPORTS) {
       await expect(lowVolume).toHaveAttribute('aria-valuemax', '2');
       await snap(page, 'player');
 
+      // The blurred backdrop is fixed to the viewport, so it never ends mid-page while scrolling.
+      // (Full-page screenshots stitch fixed layers and show a false edge, so check a real viewport.)
+      for (const [label, frac] of [
+        ['top', 0],
+        ['mid', 0.4],
+        ['bottom', 1],
+      ] as const) {
+        await page.evaluate(
+          (f) =>
+            window.scrollTo(0, f * (document.documentElement.scrollHeight - window.innerHeight)),
+          frac,
+        );
+        const box = await page.locator('.orbs').boundingBox();
+        expect(box?.y).toBe(0);
+        expect(box?.height).toBe(page.viewportSize()?.height);
+        await snap(page, `player-scroll-${label}`, false);
+      }
+      await page.evaluate(() => window.scrollTo(0, 0));
+
       // Picking a part turns the other voices off; accompaniment stays on.
       await page.getByRole('button', { name: 'Low voices', exact: true }).click();
       await expect(low).toBeChecked();
