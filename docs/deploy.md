@@ -52,8 +52,8 @@ This one token is also the OpenTofu **state credential**. R2's S3 API accepts AP
 credentials (Access Key ID = the token's id, Secret Access Key = SHA-256 hex of the token value;
 [Cloudflare R2 docs](https://developers.cloudflare.com/r2/api/tokens/)), and `deploy.yml` derives and
 masks them at run time, so there are no separate state secrets. This requires R2 *admin* access on the
-token (Workers R2 Storage: Edit). If `tofu init` reports `AccessDenied`, also add the permission
-*Workers R2 Storage Bucket Item Write*.
+token (Workers R2 Storage: Edit). This was confirmed on the first run: the permission list below was
+sufficient for both `tofu init`/`apply` against the state bucket and bucket creation.
 
 ### 2. Add the GitHub secrets
 
