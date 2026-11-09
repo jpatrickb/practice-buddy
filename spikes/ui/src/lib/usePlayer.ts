@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MockEngine } from "@/engine/mockEngine";
 import type { PracticeEngine } from "@/engine/types";
 import { sortedParts, type PartManifest, type SongManifest } from "@/data/songs";
-import { defaultPartState, effectiveGains, resetMix, snapSpeed, type PartMixState } from "./mixer";
+import { defaultMix, effectiveGains, isDefaultMix, pickPart, setAccompaniment, snapSpeed, type PartMixState } from "./mixer";
 import { load, save } from "./storage";
 
 interface Saved {
   parts: Record<string, PartMixState>;
   rate: number;
   myPart: string | null;
-  focusOn: boolean;
+  louder: boolean;
 }
 
 export interface Loop { a: number | null; b: number | null }
@@ -26,7 +26,9 @@ export interface PlayerModel {
   mix: Record<string, PartMixState>;
   gains: Record<string, number>;
   myPart: string | null;
-  focusOn: boolean;
+  louder: boolean;
+  accompanimentLabel: string | null;
+  accompanimentOn: boolean;
   toggle(): void;
   seek(sec: number): void;
   skip(delta: number): void;
@@ -35,10 +37,10 @@ export interface PlayerModel {
   setLoopB(): void;
   clearLoop(): void;
   setOn(id: string, on: boolean): void;
-  setVolume(id: string, v: number): void;
-  setSolo(id: string, solo: boolean): void;
-  chooseMyPart(id: string): void;
-  setFocusOn(on: boolean): void;
+  setGain(id: string, g: number): void;
+  chooseMyPart(id: string | null): void;
+  setAccompanimentOn(on: boolean): void;
+  setLouder(on: boolean): void;
   resetAll(): void;
   mixIsDefault: boolean;
 }
@@ -51,11 +53,14 @@ export function usePlayer(song: SongManifest): PlayerModel {
 
   const initial = useMemo<Saved>(() => {
     const s = load<Partial<Saved>>(key(song.id), {});
-    const base = resetMix(ids);
-    for (const id of ids) if (s.parts?.[id]) base[id] = { ...defaultPartState(), ...s.parts[id] };
+    const base = defaultMix(parts);
+    for (const id of ids) {
+      const saved = s.parts?.[id];
+      if (saved && typeof saved.gain === "number") base[id] = { on: saved.on !== false, gain: saved.gain };
+    }
     const myPart = s.myPart && ids.includes(s.myPart) ? s.myPart : null;
-    return { parts: base, rate: snapSpeed(s.rate ?? 1), myPart, focusOn: !!s.focusOn && !!myPart };
-  }, [song.id, ids]);
+    return { parts: base, rate: snapSpeed(s.rate ?? 1), myPart, louder: !!s.louder && !!myPart };
+  }, [song.id, ids, parts]);
 
   const engineRef = useRef<PracticeEngine | null>(null);
   const [ready, setReady] = useState(false);
@@ -64,18 +69,13 @@ export function usePlayer(song: SongManifest): PlayerModel {
   const [rate, setRateState] = useState(initial.rate);
   const [mix, setMix] = useState(initial.parts);
   const [myPart, setMyPart] = useState(initial.myPart);
-  const [focusOn, setFocusOnState] = useState(initial.focusOn);
+  const [louder, setLouderState] = useState(initial.louder);
   const [loop, setLoop] = useState<Loop>({ a: null, b: null });
 
-  const gains = useMemo(
-    () =>
-      effectiveGains({
-        parts: mix,
-        focusId: focusOn ? myPart : null,
-        defaultGains: Object.fromEntries(parts.map((p) => [p.id, p.defaultGain])),
-      }),
-    [mix, focusOn, myPart, parts],
-  );
+  const gains = useMemo(() => effectiveGains(mix, { myPart, louder }), [mix, myPart, louder]);
+  const accompaniment = useMemo(() => parts.filter((p) => p.kind === "accompaniment"), [parts]);
+  const accompanimentLabel = accompaniment.length ? accompaniment.map((p) => p.label).join(" & ") : null;
+  const accompanimentOn = accompaniment.some((p) => mix[p.id].on);
 
   // engine lifecycle (one per song)
   useEffect(() => {
@@ -114,8 +114,8 @@ export function usePlayer(song: SongManifest): PlayerModel {
 
   // persistence
   useEffect(() => {
-    save(key(song.id), { parts: mix, rate, myPart, focusOn } satisfies Saved);
-  }, [song.id, mix, rate, myPart, focusOn]);
+    save(key(song.id), { parts: mix, rate, myPart, louder } satisfies Saved);
+  }, [song.id, mix, rate, myPart, louder]);
 
   const patch = useCallback(
     (id: string, p: Partial<PartMixState>) => setMix((m) => ({ ...m, [id]: { ...m[id], ...p } })),
@@ -128,13 +128,10 @@ export function usePlayer(song: SongManifest): PlayerModel {
     setTime(engineRef.current?.currentTime() ?? sec);
   };
 
-  const mixIsDefault = ids.every((id) => {
-    const p = mix[id];
-    return p.on && !p.solo && p.volume === 1;
-  }) && !focusOn;
+  const mixIsDefault = isDefaultMix(parts, mix) && myPart === null && !louder;
 
   return {
-    song, parts, ready, playing, time, duration: song.durationSec, rate, loop, mix, gains, myPart, focusOn, mixIsDefault,
+    song, parts, ready, playing, time, duration: song.durationSec, rate, loop, mix, gains, myPart, louder, accompanimentLabel, accompanimentOn, mixIsDefault,
     toggle: () => { const e = engineRef.current; if (e) e.playing ? e.pause() : e.play(); },
     seek,
     skip: (d) => seek(now() + d),
@@ -149,10 +146,14 @@ export function usePlayer(song: SongManifest): PlayerModel {
     }),
     clearLoop: () => setLoop({ a: null, b: null }),
     setOn: (id, on) => patch(id, { on }),
-    setVolume: (id, volume) => patch(id, { volume }),
-    setSolo: (id, solo) => patch(id, { solo }),
-    chooseMyPart: (id) => { setMyPart(id); setFocusOnState(true); },
-    setFocusOn: (on) => setFocusOnState(on && myPart !== null),
-    resetAll: () => { setMix(resetMix(ids)); setFocusOnState(false); },
+    setGain: (id, gain) => patch(id, { gain }),
+    chooseMyPart: (id) => {
+      setMyPart(id);
+      if (id === null) setLouderState(false);
+      else setMix((m) => pickPart(parts, m, id));
+    },
+    setAccompanimentOn: (on) => setMix((m) => setAccompaniment(parts, m, on)),
+    setLouder: (on) => setLouderState(on && myPart !== null),
+    resetAll: () => { setMix(defaultMix(parts)); setMyPart(null); setLouderState(false); },
   };
 }

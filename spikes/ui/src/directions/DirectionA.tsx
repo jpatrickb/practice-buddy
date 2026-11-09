@@ -1,13 +1,12 @@
-import { Headphones } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Toggle } from "@/components/ui/toggle";
 import { Scrubber } from "@/components/Scrubber";
 import { LoopControls, TransportRow } from "@/components/Transport";
 import { SpeedControl } from "@/components/SpeedControl";
 import { FocusPicker, ResetMix } from "@/components/FocusPicker";
 import type { PlayerModel } from "@/lib/usePlayer";
+import { MAX_GAIN } from "@/lib/mixer";
 import { cn } from "@/lib/utils";
 
 /** A — Cards: generous, one card per part, everything labelled in words. */
@@ -37,8 +36,8 @@ export function DirectionA({ p }: { p: PlayerModel }) {
         <ul className="space-y-3">
           {p.parts.map((part) => {
             const m = p.mix[part.id];
-            const silent = p.gains[part.id] === 0;
-            const isMine = p.focusOn && p.myPart === part.id;
+            const silent = !m.on;
+            const isMine = p.myPart === part.id;
             return (
               <li key={part.id}>
                 <Card className={cn("space-y-3 p-4", isMine && "ring-2 ring-primary", silent && "opacity-70")}>
@@ -54,26 +53,17 @@ export function DirectionA({ p }: { p: PlayerModel }) {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-lg font-semibold">{part.label}</div>
                       <div className="text-sm text-muted-foreground">
-                        {isMine ? "Your part" : m.on ? (silent ? "Muted by Solo" : "Playing") : "Off"}
+                        {isMine ? "Your part" : m.on ? "Playing" : "Off"}
                       </div>
                     </div>
-                    <Toggle
-                      pressed={m.solo}
-                      onPressedChange={(v) => p.setSolo(part.id, v)}
-                      aria-label={`Hear only ${part.label}`}
-                      variant="outline"
-                      className="h-11 gap-2 rounded-xl px-4 text-base data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                    >
-                      <Headphones className="size-5" /> Only
-                    </Toggle>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="w-14 text-sm text-muted-foreground">Volume</span>
                     <Slider
                       aria-label={`${part.label} volume`}
-                      min={0} max={1} step={0.05}
-                      value={[m.volume]}
-                      onValueChange={([v]) => p.setVolume(part.id, v)}
+                      min={0} max={MAX_GAIN} step={0.05}
+                      value={[m.gain]}
+                      onValueChange={([v]) => p.setGain(part.id, v)}
                       disabled={!m.on}
                     />
                   </div>

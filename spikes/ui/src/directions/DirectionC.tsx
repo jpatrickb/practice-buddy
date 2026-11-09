@@ -24,6 +24,7 @@ export function DirectionC({ p }: { p: PlayerModel }) {
           <PlayButton p={p} className="size-24 [&_svg]:size-11" />
           <SkipButton p={p} dir={1} />
         </div>
+        <LoopControls p={p} />
       </section>
 
       <SpeedControl p={p} />
@@ -32,19 +33,18 @@ export function DirectionC({ p }: { p: PlayerModel }) {
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="secondary" className="h-14 flex-1 rounded-2xl text-base">
-              <SlidersHorizontal className="size-5" /> Mix &amp; repeat
+              <SlidersHorizontal className="size-5" /> Mix
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-3xl px-4 pb-8">
             <SheetHeader className="px-1 text-left">
-              <SheetTitle className="text-xl">Mix &amp; repeat</SheetTitle>
+              <SheetTitle className="text-xl">Mix</SheetTitle>
               <SheetDescription>Turn parts on or off and change how loud each one is.</SheetDescription>
             </SheetHeader>
             <div className="mb-2 flex justify-end"><ResetMix p={p} /></div>
             <ul>
               {p.parts.map((part) => <PartRow key={part.id} p={p} id={part.id} roomy />)}
             </ul>
-            <div className="mt-5 border-t pt-4"><LoopControls p={p} /></div>
           </SheetContent>
         </Sheet>
       </div>

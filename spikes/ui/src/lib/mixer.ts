@@ -1,54 +1,73 @@
 /** Pure mixer maths. No React, no audio. Engine gain range is linear 0..2. */
 
+export interface PartInfo { id: string; kind: string; defaultGain: number }
+
 export interface PartMixState {
   on: boolean;
-  /** 0..1 slider position, 1 = the part's normal level. */
-  volume: number;
-  solo: boolean;
-}
-
-export interface MixInput {
-  parts: Record<string, PartMixState>;
-  /** The part the user chose with "Focus my part", or null. */
-  focusId: string | null;
-  defaultGains: Record<string, number>;
+  /** Linear gain 0..MAX_GAIN. Starts at the part's manifest defaultGain. */
+  gain: number;
 }
 
 export const MAX_GAIN = 2;
-/** Focus: the user's part is boosted, everything else is lowered. */
-export const FOCUS_BOOST = 1.5;
-export const FOCUS_DUCK = 0.35;
-
-export const defaultPartState = (): PartMixState => ({ on: true, volume: 1, solo: false });
+/**
+ * "Everyone, my part louder": the picked part stays at its own level and every other part is
+ * lowered to this fraction. We lower rather than raise so the sum cannot clip any worse than the default mix.
+ */
+export const OTHERS_DUCK = 0.55;
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-/**
- * Effective linear gain per part.
- * - off => 0
- * - if any part is soloed, only soloed parts are heard (focus does not override solo)
- * - focus multiplies the chosen part by FOCUS_BOOST and every other audible part by FOCUS_DUCK
- * - result is defaultGain * volume * focusFactor, clamped to 0..MAX_GAIN
- */
-export function effectiveGains(input: MixInput): Record<string, number> {
-  const { parts, focusId, defaultGains } = input;
-  const anySolo = Object.values(parts).some((p) => p.on && p.solo);
+export const defaultMix = (parts: PartInfo[]): Record<string, PartMixState> =>
+  Object.fromEntries(parts.map((p) => [p.id, { on: true, gain: p.defaultGain }]));
+
+/** The mixer is the truth: effective gain = on ? gain : 0, optionally ducking everything but the picked part. */
+export function effectiveGains(
+  mix: Record<string, PartMixState>,
+  opts: { myPart: string | null; louder: boolean },
+): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const [id, p] of Object.entries(parts)) {
-    if (!p.on || (anySolo && !p.solo)) {
-      out[id] = 0;
-      continue;
-    }
-    const base = (defaultGains[id] ?? 1) * clamp(p.volume, 0, 1);
-    const focus = focusId === null ? 1 : id === focusId ? FOCUS_BOOST : FOCUS_DUCK;
-    out[id] = clamp(base * focus, 0, MAX_GAIN);
+  for (const [id, m] of Object.entries(mix)) {
+    const duck = opts.louder && opts.myPart !== null && id !== opts.myPart ? OTHERS_DUCK : 1;
+    out[id] = m.on ? clamp(m.gain * duck, 0, MAX_GAIN) : 0;
   }
   return out;
 }
 
-export function resetMix(partIds: string[]): Record<string, PartMixState> {
-  return Object.fromEntries(partIds.map((id) => [id, defaultPartState()]));
+/**
+ * "Which part do you sing?" shortcut: the picked part goes ON; all other voice parts go OFF.
+ * Picking an accompaniment part instead hears just that part (all voices and other accompaniment OFF).
+ * Accompaniment is untouched when a voice is picked. Volumes are not changed.
+ */
+export function pickPart(
+  parts: PartInfo[],
+  mix: Record<string, PartMixState>,
+  id: string,
+): Record<string, PartMixState> {
+  const picked = parts.find((p) => p.id === id);
+  if (!picked) return mix;
+  const out: Record<string, PartMixState> = {};
+  for (const p of parts) {
+    const cur = mix[p.id];
+    if (p.id === id) out[p.id] = { ...cur, on: true };
+    else if (picked.kind === "voice") out[p.id] = p.kind === "voice" ? { ...cur, on: false } : cur;
+    else out[p.id] = { ...cur, on: false };
+  }
+  return out;
 }
+
+/** Switch every accompaniment part on or off together. */
+export function setAccompaniment(
+  parts: PartInfo[],
+  mix: Record<string, PartMixState>,
+  on: boolean,
+): Record<string, PartMixState> {
+  const out = { ...mix };
+  for (const p of parts) if (p.kind === "accompaniment") out[p.id] = { ...out[p.id], on };
+  return out;
+}
+
+export const isDefaultMix = (parts: PartInfo[], mix: Record<string, PartMixState>) =>
+  parts.every((p) => mix[p.id].on && mix[p.id].gain === p.defaultGain);
 
 export const SPEED_MIN = 0.5;
 export const SPEED_MAX = 1.5;

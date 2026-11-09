@@ -31,7 +31,7 @@ for (const [sn, vp] of Object.entries(sizes)) {
         await page.waitForSelector("[aria-label='Play']:not([disabled])");
         await shot(`player-${song}-${d}`);
         if (d === "c") {
-          await page.getByRole("button", { name: /Mix & repeat/ }).click();
+          await page.getByRole("button", { name: /^Mix/ }).click();
           await page.waitForTimeout(500);
           await shot(`player-${song}-c-sheet`);
           await page.keyboard.press("Escape");
