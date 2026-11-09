@@ -1,17 +1,28 @@
 # Deploying practice-buddy
 
-Everything deploys from GitHub Actions (CLAUDE.md rule 6). Until the one-time steps below are
-done and `DEPLOY_ENABLED` is set (step 5), `deploy.yml` and `preview.yml` **skip cleanly**, so `main` stays green.
+Everything deploys from GitHub Actions (CLAUDE.md rule 6). Two environments:
+
+| | dev | prod |
+|---|---|---|
+| Branch | `develop` | `main` |
+| Worker | `practice-buddy-dev` (workers.dev, no custom domain) | `practice-buddy` at `practice.jpatrickbeal.com` |
+| R2 bucket | `practice-buddy-content-dev` | `practice-buddy-content` |
+| wrangler | `CLOUDFLARE_ENV=dev` (`env.dev`) | default config |
+
+PRs (same-repo) run CI, then upload a preview *version* of the dev Worker with alias `pr-<n>`
+(URL commented on the PR). The architect's PR approval is the approval; there is no separate
+deploy-approval click. Until the one-time steps below are done and `DEPLOY_ENABLED` is set
+(step 6), `deploy.yml` and the preview job **skip**, so branches stay green.
 
 ## Who owns what
 
 | Thing | Owner | Where |
 |---|---|---|
-| R2 buckets `practice-buddy-content`, `practice-buddy-content-preview` | OpenTofu | `infra/main.tf` |
+| R2 buckets `practice-buddy-content`, `practice-buddy-content-dev` | OpenTofu | `infra/main.tf` |
 | OpenTofu state bucket `practice-buddy-tfstate` | You, once, by hand | step 1 below |
-| Worker `practice-buddy` (prod), `practice-buddy-preview` (previews), R2 bindings | wrangler | `wrangler.jsonc` |
+| Workers `practice-buddy` (prod), `practice-buddy-dev` (dev + PR previews), R2 bindings | wrangler | `wrangler.jsonc` |
 | Custom domain `practice.jpatrickbeal.com` (and its DNS record + certificate) | **wrangler** (`routes` with `custom_domain`) | `wrangler.jsonc` |
-| Worker secret `COOKIE_SIGNING_KEY` | You, once | step 4 below |
+| Worker secret `COOKIE_SIGNING_KEY` (on both Workers) | You, once | step 5 below |
 
 The custom domain has exactly one owner: wrangler. OpenTofu deliberately does not manage it
 (two owners would fight over the DNS record). `zone_id` exists as a tofu variable only for future
@@ -58,56 +69,96 @@ gh secret set TF_STATE_ACCESS_KEY_ID        # from step 1
 gh secret set TF_STATE_SECRET_ACCESS_KEY    # from step 1
 ```
 
-### 4. Set the cookie signing key (Worker secret)
+### 4. Delete the stray Worker from the earlier preview experiment
 
-`COOKIE_SIGNING_KEY` signs the access cookies (ADR-0006). Use a long random value; rotating it
-logs everyone out (they just re-open their choir link). The Worker refuses to run (HTTP 500)
-if it is missing or shorter than 32 characters.
-
-A Worker must exist before it can hold a secret, so do this **after the first merge to `main`**
-has deployed (the Worker will answer 500 until the secret is set):
+A `practice-buddy-preview` Worker was created before the dev/prod model. Remove it once:
 
 ```sh
-KEY=$(openssl rand -hex 32)
-echo "$KEY" | pnpm exec wrangler secret put COOKIE_SIGNING_KEY                    # production
-echo "$KEY" | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --env preview      # previews
+pnpm exec wrangler delete --name practice-buddy-preview
 ```
 
-Prefer a *different* key for preview so preview cookies are worthless against production.
+### 5. Branch protection (recommended; not applied by this repo)
 
-### 5. Turn deployments on (final bootstrap step)
-
-Every job that touches Cloudflare (`deploy.yml` tofu + wrangler, `preview.yml` upload) is gated on
-the repository **variable** `DEPLOY_ENABLED`, and is skipped until it is `true`. Set it only after
-steps 1-4 are done:
+The architect's PR approval is the deploy approval, so require it on both branches:
 
 ```sh
-gh variable set DEPLOY_ENABLED --body true
+REPO=jpatrickb/practice-buddy
+for BRANCH in develop main; do
+  gh api -X PUT repos/$REPO/branches/$BRANCH/protection --input - <<'JSON'
+{
+  "required_status_checks": { "strict": true, "contexts": ["ci / checks", "ci / infra"] },
+  "enforce_admins": false,
+  "required_pull_request_reviews": { "required_approving_review_count": 1 },
+  "restrictions": null
+}
+JSON
+done
 ```
 
-(Set it back to anything else, or delete it, to stop all deploys.) The secret-presence check stays as a second guard.
+(Check the exact check names under a PR's "Checks" tab; they are `<caller job> / <called job>`.)
+Anyone with write access can still edit workflows in a PR, which run with the repo secrets. Protection
+plus review is the control for that; a preview-only token is the stronger fix.
 
-### 6. First deploy
+### 6. Turn deployments on, then bootstrap each Worker
 
-Merge to `main`. `deploy.yml` runs CI, then `tofu apply` (because `infra/` changed in that push),
-then `wrangler deploy` for production and for the preview worker. If you created
-`practice-buddy-content` by hand earlier, import it first:
-`tofu import cloudflare_r2_bucket.content <ACCOUNT_ID>/practice-buddy-content/default`
-(run from `infra/` after `tofu init -backend-config=backend.hcl`; see `infra/backend.hcl.example`).
+Every job that touches Cloudflare (the `deploy` job in `deploy.yml`: tofu + wrangler; the `preview`
+job in `pr.yml`) is gated on the repository **variable** `DEPLOY_ENABLED` and is skipped until it is
+`true`. Set it only after steps 1-5 are done:
+
+```sh
+gh variable set DEPLOY_ENABLED --body true      # `gh variable delete DEPLOY_ENABLED` stops all deploys
+```
+
+A Worker must exist before it can hold a secret or receive preview versions, so bring up dev first:
+
+**Dev**
+
+1. Push/merge to `develop`. `deploy.yml` runs CI, `tofu apply` (creates both R2 content buckets because
+   `infra/` changed) and deploys `practice-buddy-dev`. If you created a bucket by hand earlier, import it
+   first (from `infra/` after `tofu init -backend-config=backend.hcl`; see `infra/backend.hcl.example`):
+   `tofu import cloudflare_r2_bucket.content_dev <ACCOUNT_ID>/practice-buddy-content-dev/default`
+   (and `.content` / `practice-buddy-content` for prod).
+2. Set the cookie signing key (ADR-0006). Use a long random value; rotating it logs everyone out (they just
+   re-open their link). The Worker answers HTTP 500 until a key of at least 32 chars exists.
+   Use a **different key per environment** so dev cookies are worthless against prod:
+   ```sh
+   openssl rand -hex 32 | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --name practice-buddy-dev
+   ```
+3. Create the first dev choir and link (until the `choir` CLI exists). You need a song manifest and audio
+   in the dev bucket too; for a smoke test use `pnpm seed`-style fake content, or just an empty choir:
+   ```sh
+   TOKEN=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')     # 32 chars, base64url
+   HASH=$(printf %s "$TOKEN" | shasum -a 256 | cut -d' ' -f1)
+   cat > /tmp/dev-choir.json <<JSON
+   {"schemaVersion":1,"id":"dev-choir","name":"Dev Choir","songs":[],
+    "accessTokens":[{"sha256":"$HASH","label":"first dev link","createdAt":"$(date +%F)"}]}
+   JSON
+   pnpm exec wrangler r2 object put practice-buddy-content-dev/manifests/choirs/dev-choir.json \
+     --remote --file /tmp/dev-choir.json --content-type application/json
+   echo "https://practice-buddy-dev.<your-subdomain>.workers.dev/c/dev-choir/$TOKEN"
+   ```
+   Open that link: you should land on the song list. Revoke a link by removing its entry from
+   `accessTokens` (effective within ~60 s).
+
+**Prod**
+
+4. Merge `develop` → `main` (PR + approval). `deploy.yml` deploys `practice-buddy` to
+   `practice.jpatrickbeal.com`.
+5. Set its key, then repeat step 3 against `practice-buddy-content` (id/label of your choice):
+   ```sh
+   openssl rand -hex 32 | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --name practice-buddy
+   ```
 
 ## What the workflows do
 
-- `ci.yml` (PRs; also reused by `deploy.yml`): install → lint → prettier → typecheck → unit tests
-  (Workers runtime via Miniflare) → build; and `tofu fmt -check` + `tofu validate` (no credentials needed).
-- `deploy.yml` (push to `main`): CI → `tofu apply` only if `infra/` changed in the push →
-  `pnpm build` → `wrangler deploy` (production) → rebuild with `CLOUDFLARE_ENV=preview` →
-  `wrangler deploy` (the preview worker, so previews have something to attach to).
-- `preview.yml` (PRs): `CLOUDFLARE_ENV=preview pnpm build` then
-  `wrangler versions upload --preview-alias pr-<N>`, and comments the URL on the PR.
-  Previews run as worker `practice-buddy-preview` against `practice-buddy-content-preview`;
-  they cannot touch production content. The workflow pins `--name practice-buddy-preview` and runs
-  for same-repo PRs only. Note that a PR can edit workflow files, so treat repo write access as deploy
-  access; for stronger isolation use a separate token/environment scoped to the preview Worker.
+- `ci.yml` (reusable; called by `pr.yml` and `deploy.yml`): install → lint → prettier → typecheck →
+  unit tests (Workers runtime via Miniflare) → build; and `tofu fmt -check` + `tofu validate` (no credentials).
+- `pr.yml` (pull requests): CI, then, for same-repo PRs and only if `DEPLOY_ENABLED`:
+  `CLOUDFLARE_ENV=dev pnpm build` and `wrangler versions upload --name practice-buddy-dev --preview-alias pr-<N>`,
+  and a PR comment with the preview URL. The version is uploaded, not deployed: it is reachable only at its
+  preview URL and uses the dev bucket. (The dev Worker must already exist: see "Dev" above.)
+- `deploy.yml` (push to `develop` or `main`, serialised): CI → `tofu apply` only if `infra/` changed in the
+  push → build → `wrangler deploy`. `develop` builds with `CLOUDFLARE_ENV=dev`; `main` uses the default config.
 
 ## API token permissions: what needs what
 
@@ -132,7 +183,7 @@ data in the content bucket (the Worker reads it through its binding).
 
 The `choir` CLI (ADR-0007) uploads audio to R2 through the S3 API from the architect's Mac. That
 needs a *separate* R2 S3 token (Object Read & Write on the two content buckets), kept locally and
-never put in GitHub.
+never put in GitHub. It should have an `--env dev|production` choice (ADR-0007), matching the two buckets.
 
 ## Local development
 
@@ -146,53 +197,3 @@ pnpm dev       # http://localhost:5173
 
 `pnpm seed` creates `.dev.vars` (gitignored) with a random `COOKIE_SIGNING_KEY` if you have none;
 see `.dev.vars.example`. Nothing local touches the real Cloudflare account.
-
-## Optional: GitHub Environments (architect decides)
-
-Not applied and not required. It limits who and what can use the Cloudflare credentials: with
-today's repo-level secrets, anyone who can push a branch can edit a workflow and use them.
-
-**Setup (do this *before* editing the workflows):**
-
-```sh
-REPO=jpatrickb/practice-buddy
-ME_ID=$(gh api users/jpatrickb --jq .id)
-
-# production: required reviewer, deploys from main only
-gh api -X PUT repos/$REPO/environments/production --input - <<JSON
-{"reviewers":[{"type":"User","id":$ME_ID}],
- "deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
-JSON
-gh api -X POST repos/$REPO/environments/production/deployment-branch-policies -f name=main
-
-# preview: no reviewers
-gh api -X PUT repos/$REPO/environments/preview
-
-# Move the secrets (re-enter the values; GitHub never shows them again)
-for s in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TF_STATE_ACCESS_KEY_ID TF_STATE_SECRET_ACCESS_KEY; do
-  gh secret set $s --env production
-done
-gh secret set CLOUDFLARE_API_TOKEN  --env preview   # ideally a token scoped to Workers Scripts: Edit only
-gh secret set CLOUDFLARE_ACCOUNT_ID --env preview
-# then delete the repo-level copies:
-for s in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TF_STATE_ACCESS_KEY_ID TF_STATE_SECRET_ACCESS_KEY; do
-  gh secret delete $s
-done
-```
-
-**Workflow changes** (one line each; apply in the same PR that moves the secrets, otherwise deploys
-lose their credentials):
-
-```yaml
-# deploy.yml, job `deploy`
-    environment: production      # waits for the required reviewer on every deploy
-
-# preview.yml, job `preview`
-    environment: preview
-```
-
-Notes: `DEPLOY_ENABLED` stays a repo-level variable, so the gate still skips jobs before the environment
-is evaluated (no approval prompt when disabled). Every `main` deploy will then need a click from the
-reviewer; if that is too noisy, drop the reviewer but keep the branch restriction. The preview
-environment's secrets can be a separate, preview-only token, which is the real fix for "a PR can
-use the secrets".

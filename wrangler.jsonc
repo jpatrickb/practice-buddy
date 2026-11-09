@@ -17,9 +17,9 @@
   // Production custom domain. Owned by wrangler (see docs/deploy.md); NOT managed in OpenTofu.
   "routes": [{ "pattern": "practice.jpatrickbeal.com", "custom_domain": true }],
   "env": {
-    "preview": {
-      "name": "practice-buddy-preview",
-      "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "practice-buddy-content-preview" }],
+    "dev": {
+      "name": "practice-buddy-dev",
+      "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "practice-buddy-content-dev" }],
       "workers_dev": true,
       "preview_urls": true,
       "routes": [],

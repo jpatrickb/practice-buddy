@@ -1,16 +1,11 @@
 name: CI
 
-# Runs on every PR, and is reused by deploy.yml for pushes to main (so main is not checked twice).
+# Reusable: called by pr.yml (pull requests) and deploy.yml (pushes to develop/main).
 on:
-  pull_request:
   workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   checks:

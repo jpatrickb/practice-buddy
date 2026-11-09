@@ -1,4 +1,4 @@
-name: PR preview
+name: PR (uploads to the dev Worker)
 
 on:
   pull_request:
@@ -12,7 +12,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   preview:
+    needs: ci
     # Same-repo PRs only: fork PRs never get secrets, and PR code must not run with them unreviewed.
     # Also gated on the repo variable DEPLOY_ENABLED (docs/deploy.md): nothing touches Cloudflare until it is 'true'.
     if: vars.DEPLOY_ENABLED == 'true' && github.event.pull_request.head.repo.full_name == github.repository
@@ -38,9 +42,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         if: env.HAS_CF_SECRETS == 'true'
-      # CLOUDFLARE_ENV=preview bakes env.preview (worker practice-buddy-preview + preview R2 bucket)
+      # CLOUDFLARE_ENV=dev bakes env.dev (Worker practice-buddy-dev + dev R2 bucket)
       # into the build, so a preview can never read or write production content.
-      - run: CLOUDFLARE_ENV=preview pnpm build
+      - run: CLOUDFLARE_ENV=dev pnpm build
         if: env.HAS_CF_SECRETS == 'true'
       - name: Upload preview version
         id: upload
@@ -50,7 +54,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: pnpm
-          command: versions upload --name practice-buddy-preview --preview-alias pr-${{ github.event.pull_request.number }} --message "PR #${{ github.event.pull_request.number }}"
+          command: versions upload --name practice-buddy-dev --preview-alias pr-${{ github.event.pull_request.number }} --message "PR #${{ github.event.pull_request.number }}"
       - name: Comment preview URL
         if: env.HAS_CF_SECRETS == 'true' && steps.upload.outcome == 'success'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -62,7 +66,7 @@ jobs:
             const alias = out.match(/https:\/\/pr-\d+-[^\s]+\.workers\.dev/);
             const url = alias ? alias[0] : (out.match(/https:\/\/[^\s]+\.workers\.dev/) || [])[0];
             const marker = '<!-- practice-buddy-preview -->';
-            const body = `${marker}\n**Preview:** ${url ?? '(uploaded, but the URL could not be parsed; see the workflow log)'}\n\nPreview uses the *preview* R2 bucket and its own \`COOKIE_SIGNING_KEY\`.`;
+            const body = `${marker}\n**Preview:** ${url ?? '(uploaded, but the URL could not be parsed; see the workflow log)'}\n\nPreview uses the *dev* R2 bucket and the dev Worker's \`COOKIE_SIGNING_KEY\`.`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });

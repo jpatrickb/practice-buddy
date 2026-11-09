@@ -13,9 +13,9 @@ resource "cloudflare_r2_bucket" "content" {
   }
 }
 
-resource "cloudflare_r2_bucket" "content_preview" {
+resource "cloudflare_r2_bucket" "content_dev" {
   account_id = var.account_id
-  name       = "practice-buddy-content-preview"
+  name       = "practice-buddy-content-dev"
   location   = var.r2_location
 }
 
