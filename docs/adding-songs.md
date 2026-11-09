@@ -101,7 +101,28 @@ If you lose it, make another. Changes show up for singers within about a minute.
 - Rotating without a gap: `new-link` with a new label, send that to the choir, then `revoke-link` the old
   one. (A choir can have several active links at once.)
 
-## 6. Troubleshooting
+## 6. Remove a song after the performance
+
+Two different things:
+
+- **Hide it** from a choir (the audio stays uploaded, so you can add it back later):
+
+  ```sh
+  pnpm choir remove-song-from-choir oak-hills-3rd candlelight-carol --env prod
+  ```
+
+- **Delete it permanently** (the audio is erased from storage):
+
+  ```sh
+  pnpm choir delete-song candlelight-carol --env prod --dry-run   # shows what would go
+  pnpm choir delete-song candlelight-carol --env prod             # asks you to type the song id
+  ```
+
+  It refuses while any choir still lists the song and tells you which. Add `--from-all-choirs` to remove it
+  from every choir and delete it in one go. It cannot be undone: to bring the song back, upload it again
+  with `add-song`. If it is interrupted (e.g. the network drops), just run the same command again.
+
+## 7. Troubleshooting
 
 | You see | What to do |
 |---|---|
@@ -114,4 +135,5 @@ If you lose it, make another. Changes show up for singers within about a minute.
 | `song.yaml has problems` | The message names the line; ids need lowercase letters, numbers, dashes |
 | `There is no choir ...` / `There is no song ...` | Create it first (`add-choir` / `add-song`); check the `--env` |
 | A song doesn't show up for singers | Wait a minute; check `pnpm choir list --env ...` for the choir's songs |
-| Want to try without risk | Add `--dry-run` to `add-song`, or use `--env dev` / `--env local` |
+| `Choirs still list ...` when deleting | Run the `remove-song-from-choir` lines it prints, or add `--from-all-choirs` |
+| Want to try without risk | Add `--dry-run` to `add-song`, or use `--env dev` / `--env local` (`delete-song` also has `--dry-run`) |

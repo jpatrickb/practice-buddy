@@ -13,17 +13,27 @@ export interface Storage {
   /** Returns null if the key does not exist. */
   get(key: string): Promise<Buffer | null>;
   put(key: string, body: Buffer | { file: string }, contentType: string): Promise<void>;
+  /** Deleting a key that does not exist is not an error. */
+  delete(key: string): Promise<void>;
 }
 
 export class MemoryStorage implements Storage {
   readonly objects = new Map<string, Buffer>();
   readonly puts: string[] = [];
+  readonly deletes: string[] = [];
+  /** Tests: make deleting these keys fail (simulates a crash midway). */
+  failDeleteOf = new Set<string>();
   async get(key: string) {
     return this.objects.get(key) ?? null;
   }
   async put(key: string, body: Buffer | { file: string }) {
     this.objects.set(key, Buffer.isBuffer(body) ? body : await readFile(body.file));
     this.puts.push(key);
+  }
+  async delete(key: string) {
+    if (this.failDeleteOf.has(key)) throw new Error(`simulated failure deleting ${key}`);
+    this.objects.delete(key);
+    this.deletes.push(key);
   }
 }
 
@@ -75,6 +85,15 @@ export class WranglerStorage implements Storage {
       throw e;
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    try {
+      await this.wrangler(['delete', `${this.target.bucket}/${key}`, this.flag()]);
+    } catch (e) {
+      if (e instanceof NotFound) return;
+      throw e;
     }
   }
 

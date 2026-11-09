@@ -28,6 +28,7 @@ const ctx = (env: 'dev' | 'prod' = 'dev', yes = false): cmd.Ctx => ({
   today: () => '2026-11-08',
   yes,
   confirm: async () => confirmAnswer,
+  ask: async () => '',
 });
 
 /** A song folder of sine WAVs (no real music). `seconds` per part; ids in order. */

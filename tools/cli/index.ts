@@ -21,6 +21,9 @@ Choirs and links
   add-choir <choir-id> --name "..."    create a choir
   add-song-to-choir <choir-id> <song-id>
   remove-song-from-choir <choir-id> <song-id>
+  delete-song <song-id>                permanently delete a song and its audio (must not be in any choir)
+      --from-all-choirs                remove it from every choir first, then delete
+      --dry-run                        show what would be deleted
   new-link <choir-id> [--label "..."]  make a link (shown once!)
   revoke-link <choir-id> <label>       disable a link
   list                                 show choirs, songs and links (never the link URLs)
@@ -41,6 +44,7 @@ async function main() {
       'dry-run': { type: 'boolean' },
       'allow-lossy': { type: 'boolean' },
       force: { type: 'boolean' },
+      'from-all-choirs': { type: 'boolean' },
       name: { type: 'string' },
       label: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
@@ -59,14 +63,15 @@ async function main() {
     log: (l) => console.log(l),
     yes: values.yes,
     today: () => new Date().toLocaleDateString('en-CA'),
-    confirm: async (q) => {
+    ask: async (q) => {
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       try {
-        return /^y(es)?$/i.test((await rl.question(q)).trim());
+        return await rl.question(q);
       } finally {
         rl.close();
       }
     },
+    confirm: async (q) => /^y(es)?$/i.test((await ctx.ask(q)).trim()),
   };
 
   switch (command) {
@@ -88,6 +93,12 @@ async function main() {
     case 'remove-song-from-choir':
       need(2, '<choir-id> <song-id>');
       return cmd.removeSongFromChoir(ctx, args[0]!, args[1]!);
+    case 'delete-song':
+      need(1, '<song-id> [--from-all-choirs] [--dry-run]');
+      return cmd.deleteSong(ctx, args[0]!, {
+        dryRun: values['dry-run'],
+        fromAllChoirs: values['from-all-choirs'],
+      });
     case 'new-link':
       need(1, '<choir-id> [--label "text"]');
       return cmd.newLink(ctx, args[0]!, values.label);
