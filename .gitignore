@@ -30,4 +30,5 @@ worker-configuration.d.ts
 
 # Playwright
 test-results/
+e2e-screenshots/
 playwright-report/
