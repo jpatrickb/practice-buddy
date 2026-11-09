@@ -35,6 +35,8 @@ export interface Ctx {
   target: Target;
   log: (line: string) => void;
   confirm: (question: string) => Promise<boolean>;
+  /** Prompt for a line of text. */
+  ask: (question: string) => Promise<string>;
   /** YYYY-MM-DD */
   today: () => string;
   yes?: boolean;
@@ -71,6 +73,13 @@ async function register(ctx: Ctx, kind: 'songs' | 'choirs', id: string) {
   const idx = await loadIndex(ctx);
   if (idx[kind].includes(id)) return;
   idx[kind] = [...idx[kind], id].sort();
+  await ctx.storage.put(indexKey, json(idx), 'application/json');
+}
+
+async function unregister(ctx: Ctx, id: string) {
+  const idx = await loadIndex(ctx);
+  if (!idx.songs.includes(id)) return;
+  idx.songs = idx.songs.filter((s) => s !== id);
   await ctx.storage.put(indexKey, json(idx), 'application/json');
 }
 
@@ -131,6 +140,8 @@ export interface AddSongResult {
   uploaded: string[];
   alreadyThere: string[];
   manifestWritten: boolean;
+  /** Old files no longer referenced (deleted unless dry run). */
+  replaced: string[];
 }
 
 export async function addSong(
@@ -256,6 +267,28 @@ export async function addSong(
       manifestWritten = true;
     }
 
+    // Files of the OLD manifest that the new one no longer uses: delete them, but only after the new
+    // manifest is in place, so nothing ever points at missing audio.
+    const keep = new Set(keys.values());
+    const replaced = (existing?.parts ?? []).filter((p) => !keep.has(p.file));
+    const replacedFailed: string[] = [];
+    for (const old of replaced) {
+      let result = opts.dryRun ? 'replaced (would delete old file)' : 'replaced (old file deleted)';
+      if (!opts.dryRun) {
+        try {
+          await ctx.storage.delete(old.file);
+        } catch {
+          replacedFailed.push(old.file);
+          result = 'replaced (DELETE FAILED)';
+        }
+      }
+      rows.push([old.label, old.kind, String(old.channels), '-', old.file, result]);
+    }
+    if (replacedFailed.length)
+      warnings.push(
+        `Could not delete these old files (they are no longer used, but are still stored):\n    ${replacedFailed.join('\n    ')}`,
+      );
+
     ctx.log('');
     ctx.log(table(rows));
     ctx.log('');
@@ -264,7 +297,7 @@ export async function addSong(
     );
     for (const w of warnings) ctx.log(`Warning: ${w}`);
     if (opts.dryRun) ctx.log(`Dry run on ${ctx.target.name}: nothing was uploaded.`);
-    else if (uploaded.length === 0 && !manifestWritten)
+    else if (uploaded.length === 0 && !manifestWritten && replaced.length === 0)
       ctx.log(`Nothing to do: ${ctx.target.name} is already up to date.`);
     else
       ctx.log(
@@ -272,7 +305,13 @@ export async function addSong(
       );
     if (!opts.dryRun)
       ctx.log(`Next: pnpm choir add-song-to-choir <choir-id> ${song.id} --env ${ctx.target.name}`);
-    return { manifest, uploaded, alreadyThere, manifestWritten };
+    return {
+      manifest,
+      uploaded,
+      alreadyThere,
+      manifestWritten,
+      replaced: replaced.map((p) => p.file),
+    };
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -404,4 +443,102 @@ export async function list(ctx: Ctx) {
       `  ${s.id}  "${s.title}"  ${s.parts.length} parts, ${s.durationSec} s  in: ${inChoirs.join(', ') || '(no choir yet)'}`,
     );
   }
+}
+
+// ---------- delete-song ----------
+
+const pendingKey = (songId: string) => `manifests/deleting/${songId}.json`;
+
+/**
+ * Permanently delete a song and its audio.
+ * Order (crash-safe): remove from choirs -> write a "deleting" record listing the audio ->
+ * delete the song manifest -> delete the audio -> delete the record -> update the index.
+ * Once the manifest is gone nothing can reach the audio, and the record lets a re-run finish the job.
+ */
+export async function deleteSong(
+  ctx: Ctx,
+  songId: string,
+  opts: { dryRun?: boolean; fromAllChoirs?: boolean } = {},
+) {
+  checkId('song', songId);
+  const manifest = await readJson(ctx, songManifestKey(songId), songManifestSchema);
+  const pendingBuf = await ctx.storage.get(pendingKey(songId));
+  const pending: { files: string[] } | null = pendingBuf
+    ? JSON.parse(pendingBuf.toString('utf8'))
+    : null;
+  const idx = await loadIndex(ctx);
+
+  if (!manifest && !pending) {
+    if (idx.songs.includes(songId)) {
+      if (!opts.dryRun) await unregister(ctx, songId);
+      return ctx.log(
+        `"${songId}" was already deleted from ${ctx.target.name}; cleaned it out of the index.`,
+      );
+    }
+    throw new UserError(
+      `There is no song "${songId}" on ${ctx.target.name}.` +
+        (idx.songs.length ? ` Songs there: ${idx.songs.join(', ')}.` : '') +
+        ' (Check --env.)',
+    );
+  }
+
+  // Which choirs still list it?
+  const holders: ChoirManifest[] = [];
+  for (const cid of idx.choirs) {
+    const c = await readJson(ctx, choirManifestKey(cid), choirManifestSchema);
+    if (c?.songs.includes(songId)) holders.push(c);
+  }
+  if (holders.length && !opts.fromAllChoirs)
+    throw new UserError(
+      `Choirs still list "${songId}": ${holders.map((c) => c.id).join(', ')}.\n` +
+        'Remove it from them first:\n' +
+        holders
+          .map(
+            (c) => `  pnpm choir remove-song-from-choir ${c.id} ${songId} --env ${ctx.target.name}`,
+          )
+          .join('\n') +
+        '\nor delete it from all of them at once by adding --from-all-choirs.',
+    );
+
+  const files = manifest ? manifest.parts.map((p) => p.file) : pending!.files;
+  ctx.log(
+    manifest
+      ? `Song "${manifest.title}" (${songId}) on ${ctx.target.name} (${ctx.target.bucket}):`
+      : `Finishing an interrupted delete of "${songId}" on ${ctx.target.name}:`,
+  );
+  const rows = [['Part', 'File', 'Size']];
+  for (const f of files) {
+    const label = manifest?.parts.find((p) => p.file === f)?.label ?? '';
+    const obj = await ctx.storage.get(f);
+    rows.push([label, f, obj ? mb(obj.length) : 'already gone']);
+  }
+  ctx.log(table(rows));
+  if (holders.length) ctx.log(`Will also remove it from: ${holders.map((c) => c.id).join(', ')}.`);
+  ctx.log(
+    'This deletes the audio permanently. It cannot be undone (you would have to upload the song again).',
+  );
+
+  if (opts.dryRun) return ctx.log(`Dry run on ${ctx.target.name}: nothing was deleted.`);
+
+  if (!ctx.yes) {
+    if (ctx.target.name === 'prod') {
+      const typed = (
+        await ctx.ask(`PRODUCTION. Type the song id (${songId}) to delete it: `)
+      ).trim();
+      if (typed !== songId)
+        throw new UserError('That did not match the song id. Cancelled; nothing was deleted.');
+    } else if (!(await ctx.confirm('Delete permanently? (y/N) '))) {
+      throw new UserError('Cancelled. Nothing was deleted.');
+    }
+  }
+
+  for (const c of holders) await saveChoir(ctx, withoutSong(c, songId));
+  if (manifest) {
+    await ctx.storage.put(pendingKey(songId), json({ songId, files }), 'application/json');
+    await ctx.storage.delete(songManifestKey(songId));
+  }
+  for (const f of files) await ctx.storage.delete(f);
+  await ctx.storage.delete(pendingKey(songId));
+  await unregister(ctx, songId);
+  ctx.log(`Deleted "${songId}" and ${files.length} audio file(s) from ${ctx.target.name}.`);
 }

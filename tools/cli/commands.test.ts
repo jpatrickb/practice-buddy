@@ -28,6 +28,7 @@ const ctx = (env: 'dev' | 'prod' = 'dev', yes = false): cmd.Ctx => ({
   today: () => '2026-11-08',
   yes,
   confirm: async () => confirmAnswer,
+  ask: async () => '',
 });
 
 /** A song folder of sine WAVs (no real music). `seconds` per part; ids in order. */
@@ -122,6 +123,77 @@ describe.skipIf(!hasFfmpeg)('add-song', () => {
     const r = await cmd.addSong(ctx(), dir);
     expect(r.uploaded).toHaveLength(1);
     expect(r.uploaded[0]).toContain('/part2.');
+  });
+
+  it('re-exporting a part deletes only its old file, after the new manifest is written', async () => {
+    const dir = makeSong('swap', { part1: 2, part2: 2 });
+    const first = await cmd.addSong(ctx(), dir);
+    const [old1, old2] = first.manifest.parts.map((p) => p.file) as [string, string];
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part2.wav'),
+    ]);
+    storage.puts.length = 0;
+    const r = await cmd.addSong(ctx(), dir);
+    expect(r.replaced).toEqual([old2]);
+    expect(storage.deletes).toEqual([old2]);
+    expect(storage.objects.has(old2)).toBe(false);
+    expect(storage.objects.has(old1)).toBe(true); // unchanged part untouched
+    const m = JSON.parse(storage.objects.get('manifests/songs/swap.json')!.toString());
+    expect(m.parts.map((p: { file: string }) => p.file)).not.toContain(old2);
+    for (const p of m.parts) expect(storage.objects.has(p.file)).toBe(true); // nothing points at missing audio
+    expect(out.join('\n')).toContain('replaced (old file deleted)');
+  });
+
+  it('a delete failure for an old file is a warning, not a crash', async () => {
+    const dir = makeSong('swapfail', { part1: 2 });
+    const first = await cmd.addSong(ctx(), dir);
+    storage.failDeleteOf.add(first.manifest.parts[0]!.file);
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part1.wav'),
+    ]);
+    await cmd.addSong(ctx(), dir);
+    expect(out.join('\n')).toContain('DELETE FAILED');
+    expect(out.join('\n')).toContain('Could not delete these old files');
+  });
+
+  it('dry run does not delete old files', async () => {
+    const dir = makeSong('swapdry', { part1: 2 });
+    await cmd.addSong(ctx(), dir);
+    execFileSync('ffmpeg', [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=999:sample_rate=44100:duration=2',
+      '-ac',
+      '2',
+      join(dir, 'part1.wav'),
+    ]);
+    storage.puts.length = 0;
+    await cmd.addSong(ctx(), dir, { dryRun: true });
+    expect(storage.deletes).toEqual([]);
+    expect(storage.puts).toEqual([]);
+    expect(out.join('\n')).toContain('replaced (would delete old file)');
   });
 
   it('dry run uploads nothing', async () => {
