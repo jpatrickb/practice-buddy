@@ -56,7 +56,7 @@ the UI time can be off by up to ~30 ms during a speed change.
   looping silent `<audio>` is started instead. Both are untested on a real device so far.
 - The context is resumed on the first pointer/touch/key event and after an interruption (call, Siri).
 - Lock-screen / background playback is not guaranteed on iOS.
-- AudioWorklet needs a secure context: https in production, `localhost` in dev, `pnpm dev:https` for phones on the LAN.
+- AudioWorklet needs a secure context: https in production, `localhost` in dev, use a PR preview or the dev site (https) to test on a phone; plain `http://<lan-ip>` will not work.
 - Whole-song decode before playback; nothing streams.
 
 ## Tests
@@ -64,4 +64,4 @@ the UI time can be off by up to ~30 ms during a speed change.
 - `pnpm test`: `timeline.test.ts` (position/rate/loop/length logic).
 - `pnpm test:e2e`: Playwright. Runs `pnpm seed` + `pnpm dev` on port 5273, redeems the dev link, and drives the engine
   through `e2e/harness/audio.html` (test-only, not referenced by `index.html`, so not in the production bundle).
-  Needs ffmpeg and `npx playwright install chromium`. It is not part of CI yet.
+  Needs ffmpeg and `pnpm exec playwright install chromium`. It runs in CI as `ci / e2e`.

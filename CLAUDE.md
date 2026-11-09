@@ -34,16 +34,27 @@ Browser ──> Cloudflare Worker (practice.jpatrickbeal.com)
 ## Layout
 | Path | What |
 |---|---|
-| `src/web/` | React + TS + Tailwind v4 + shadcn/ui SPA |
-| `src/worker/` | Hono Worker (auth, manifests, audio proxy) |
-| `src/shared/` | Zod schemas for manifests, shared types |
-| `tools/cli/` | `choir` CLI: ingest/encode/align/upload songs, manage choirs & links |
-| `spikes/` | Throwaway prototypes; not production code |
-| `infra/` | OpenTofu (R2 buckets, DNS/custom domain, Access) |
-| `docs/adr/` | Architecture Decision Records — read before changing anything structural |
+| `src/web/` | React + TS + Tailwind v4 + shadcn/ui SPA: `pages/`, `components/`, `player/` (state), `lib/` (mixer, prefs), `api/`, `engine/` (real vs mock) |
+| `src/web/audio/` | Production audio engine (Signalsmith Stretch, 24 kHz); has its own README |
+| `src/worker/` | Hono Worker (link redemption, signed-cookie grants, manifests, audio proxy) |
+| `src/shared/` | Zod schemas for manifests and API responses, R2 key helpers |
+| `tools/cli/` | `choir` CLI: encode/upload songs, manage choirs & links, delete songs |
+| `scripts/` | `seed-local.ts`: fake content for local dev and e2e |
+| `test/` | Worker tests (run in the Workers runtime); unit tests also sit next to their code as `*.test.ts` |
+| `e2e/` | Playwright tests (+ `harness/`, a test-only engine page) |
+| `public/` | Static files copied as-is (`robots.txt`, `_headers`) |
+| `infra/` | OpenTofu (R2 buckets; the custom domain is owned by wrangler, not tofu) |
+| `.github/workflows/` | `ci.yml` (reusable), `pr.yml`, `deploy.yml`, `bootstrap.yml` |
+| `spikes/` | Reference prototypes (engine comparison, UI styles). Not built, not production code |
+| `docs/` | `architecture.md`, `development.md`, `deploy.md`, `adding-songs.md`, `roadmap.md`, `adr/` (binding decisions: read before changing anything structural) |
+
+New here? Read `README.md`, then `docs/architecture.md` and `docs/development.md`.
+
+## Environments
+- Prod: https://practice.jpatrickbeal.com (`main`). Dev and PR previews: https://practice-buddy-dev.jpatrickbeal.workers.dev (`develop`).
 
 ## Conventions
-- pnpm; TypeScript strict; Vitest for unit tests; Playwright for e2e.
+- pnpm; TypeScript strict; Vitest for unit tests; Playwright for e2e. Workflow, tests and PR rules: `docs/development.md`.
 - Validate every manifest read with the Zod schema in `src/shared/`.
 - Mobile-first UI; most users are on phones. Non-technical copy (see ADR-0011).
 
