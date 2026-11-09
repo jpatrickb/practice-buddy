@@ -4,6 +4,12 @@ name: Deploy
 on:
   push:
     branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      apply_infra:
+        description: Run tofu apply even if infra/ did not change (needed for the very first deploy)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,7 +52,12 @@ jobs:
         if: env.HAS_CF_SECRETS == 'true'
         env:
           BEFORE: ${{ github.event.before }}
+          APPLY_INFRA: ${{ inputs.apply_infra }}
         run: |
+          if [ "$APPLY_INFRA" = "true" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # First push / unknown base: assume changed.
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then

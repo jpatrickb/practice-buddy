@@ -116,9 +116,17 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 
 **Dev**
 
-1. Push/merge to `develop`. `deploy.yml` runs CI, `tofu apply` (creates both R2 content buckets because
-   `infra/` changed) and deploys `practice-buddy-dev`. If you created a bucket by hand earlier, import it
-   first (from `infra/` after `tofu init -backend-config=backend.hcl`; see `infra/backend.hcl.example`):
+1. Dispatch `deploy.yml` on `develop` with `apply_infra=true` (a plain push would skip `tofu apply`
+   because `infra/` has not changed since it was first merged, and the deploy would then fail on the missing
+   R2 buckets):
+   ```sh
+   gh workflow run deploy.yml -R jpatrickb/practice-buddy --ref develop -f apply_infra=true
+   ```
+   It runs CI, `tofu apply` (creates both R2 content buckets) and deploys `practice-buddy-dev`. Later runs
+   apply infra only when `infra/` changed in the push; use the same dispatch to force it. Applying again from
+   `main` is safe: both buckets live in one state, so it is idempotent. If you created a bucket by hand
+   earlier, import it first (from `infra/` after `tofu init -backend-config=backend.hcl`; see
+   `infra/backend.hcl.example`):
    `tofu import cloudflare_r2_bucket.content_dev <ACCOUNT_ID>/practice-buddy-content-dev/default`
    (and `.content` / `practice-buddy-content` for prod).
 2. The cookie signing key (ADR-0006) is deployed by the workflow from the GitHub secret
@@ -144,7 +152,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 
 **Prod**
 
-4. Merge `develop` → `main` (PR + approval). `deploy.yml` deploys `practice-buddy` to
+4. Merge `develop` → `main` (PR). `deploy.yml` deploys `practice-buddy` to
    `practice.jpatrickbeal.com`.
 5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the choir step above against
    `practice-buddy-content` (id/label of your choice).
@@ -157,7 +165,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
   `CLOUDFLARE_ENV=dev pnpm build` and `wrangler versions upload --name practice-buddy-dev --preview-alias pr-<N>`,
   and a PR comment with the preview URL. The version is uploaded, not deployed: it is reachable only at its
   preview URL and uses the dev bucket. (The dev Worker must already exist: see "Dev" above.)
-- `deploy.yml` (push to `develop` or `main`, serialised): CI → `tofu apply` only if `infra/` changed in the
+- `deploy.yml` (push to `develop` or `main`, or manual dispatch with `apply_infra`; serialised): CI → `tofu apply` only if `infra/` changed in the
   push → build → `wrangler deploy`. `develop` builds with `CLOUDFLARE_ENV=dev`; `main` uses the default config.
 
 ## API token permissions: what needs what
