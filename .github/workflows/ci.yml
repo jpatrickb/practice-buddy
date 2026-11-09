@@ -21,6 +21,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # CLI tests generate audio fixtures with ffmpeg
       - run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      - run: pnpm check:hardcoding
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck

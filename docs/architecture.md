@@ -78,7 +78,8 @@ Part labels and counts are free-form: nothing assumes SATB.
 | Cookie signing, grants, expiry | `src/worker/grants.ts`, `crypto.ts` |
 | Who may see which choir/song (revocation) | `src/worker/access.ts`, `manifests.ts` (60 s cache) |
 | Audio streaming, Range, path-traversal rules | `src/worker/audio.ts` |
-| Worker config, bindings, domain, dev/prod envs | `wrangler.jsonc` (`env.dev`), `src/worker/env.ts` |
+| Where this deployment lives (custom domain, dev URL): one file | `deployment.json` (ADR-0012); read by `vite.config.ts` and the CLI |
+| Worker config, bindings, dev/prod envs | `wrangler.jsonc` (`env.dev`), `src/worker/env.ts` |
 | Pages and routing | `src/web/App.tsx`, `src/web/pages/` (`Home`, `PlayerPage`) |
 | Player state (play, loop, mix, speed, persistence) | `src/web/player/usePlayer.ts`, `src/web/lib/{mixer,saved}.ts` |
 | Look and layout (Fusion theme, Tailwind v4, shadcn/Radix) | `src/web/components/`, `src/web/index.css` |

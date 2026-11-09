@@ -1,6 +1,6 @@
 name: Deploy
 
-# develop -> dev (Worker practice-buddy-dev on workers.dev); main -> prod (practice.jpatrickbeal.com).
+# develop -> dev (Worker practice-buddy-dev on workers.dev); main -> prod (custom domain from deployment.json, if set).
 on:
   push:
     branches: [main, develop]
