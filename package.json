@@ -15,14 +15,16 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "vitest run && vitest run -c vitest.cli.config.ts",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed-local.ts"
+    "seed": "tsx scripts/seed-local.ts",
+    "choir": "tsx tools/cli/index.ts"
   },
   "dependencies": {
     "hono": "^4.13.17",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
