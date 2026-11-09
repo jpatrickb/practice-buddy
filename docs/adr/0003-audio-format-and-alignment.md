@@ -10,3 +10,6 @@ Parts must line up to the sample. Lossy encoders add priming/padding: AAC ≈ 21
 - The spike verifies that decoded AAC lines up the same way in Chrome, Safari, and Firefox (using a generated click-track fixture).
 ## Consequences
 - Lossy masters are rejected by the CLI, or accepted only with `--allow-lossy` plus a warning.
+
+## Amendment (2026-11-08)
+WebKit returns 635 extra tail samples when decoding AAC, while Chromium and Firefox are exact. The song manifest therefore carries **`durationSamples`** (at the master sample rate), and the engine uses that as the song length instead of the decoded buffer length.

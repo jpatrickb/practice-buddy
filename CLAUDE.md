@@ -46,3 +46,7 @@ Browser ──> Cloudflare Worker (practice.jpatrickbeal.com)
 - pnpm; TypeScript strict; Vitest for unit tests; Playwright for e2e.
 - Validate every manifest read with the Zod schema in `src/shared/`.
 - Mobile-first UI; most users are on phones. Non-technical copy (see ADR-0011).
+
+## Commits and PRs
+- Branch from `develop`; open PRs into `develop`. `develop` → `main` releases go through a PR too. The architect's approval is the deploy approval.
+- Commit trailers name the model that actually wrote the commit (e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`).
