@@ -94,6 +94,21 @@ jobs:
         run: |
           if [ "$DEPLOY_ENV" = "dev" ]; then export CLOUDFLARE_ENV=dev; fi
           pnpm build
+      # The Worker's COOKIE_SIGNING_KEY comes from GitHub secrets and is uploaded together with the
+      # deploy (--secrets-file), so a brand-new Worker has its key from its first version.
+      - name: Prepare Worker secrets file
+        if: env.HAS_CF_SECRETS == 'true'
+        env:
+          KEY_DEV: ${{ secrets.COOKIE_SIGNING_KEY_DEV }}
+          KEY_PROD: ${{ secrets.COOKIE_SIGNING_KEY_PROD }}
+        run: |
+          if [ "$DEPLOY_ENV" = "prod" ]; then KEY="$KEY_PROD"; NAME=COOKIE_SIGNING_KEY_PROD; else KEY="$KEY_DEV"; NAME=COOKIE_SIGNING_KEY_DEV; fi
+          if [ "${#KEY}" -lt 32 ]; then
+            echo "::error::GitHub secret $NAME is missing or shorter than 32 chars (see docs/deploy.md)."
+            exit 1
+          fi
+          umask 077
+          jq -n --arg k "$KEY" '{COOKIE_SIGNING_KEY: $k}' > "$RUNNER_TEMP/worker-secrets.json"
       - name: wrangler deploy
         if: env.HAS_CF_SECRETS == 'true'
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
@@ -101,4 +116,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: pnpm
-          command: deploy
+          command: deploy --secrets-file ${{ runner.temp }}/worker-secrets.json

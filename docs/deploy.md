@@ -22,7 +22,7 @@ deploy-approval click. Until the one-time steps below are done and `DEPLOY_ENABL
 | OpenTofu state bucket `practice-buddy-tfstate` | You, once, by hand | step 1 below |
 | Workers `practice-buddy` (prod), `practice-buddy-dev` (dev + PR previews), R2 bindings | wrangler | `wrangler.jsonc` |
 | Custom domain `practice.jpatrickbeal.com` (and its DNS record + certificate) | **wrangler** (`routes` with `custom_domain`) | `wrangler.jsonc` |
-| Worker secret `COOKIE_SIGNING_KEY` (on both Workers) | You, once | step 5 below |
+| Worker secret `COOKIE_SIGNING_KEY` (both Workers) | deploy.yml, from GitHub secrets `COOKIE_SIGNING_KEY_DEV` / `_PROD` | step 3 below |
 
 The custom domain has exactly one owner: wrangler. OpenTofu deliberately does not manage it
 (two owners would fight over the DNS record). `zone_id` exists as a tofu variable only for future
@@ -67,11 +67,17 @@ gh secret set CLOUDFLARE_API_TOKEN          # the token from step 2
 gh secret set CLOUDFLARE_ACCOUNT_ID         # your account id
 gh secret set TF_STATE_ACCESS_KEY_ID        # from step 1
 gh secret set TF_STATE_SECRET_ACCESS_KEY    # from step 1
+
+# Cookie signing keys (ADR-0006): one per environment, different values, >= 32 chars.
+# deploy.yml uploads the matching one with each deploy; the deploy fails loudly if it is missing.
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_DEV  -R jpatrickb/practice-buddy
+openssl rand -hex 32 | gh secret set COOKIE_SIGNING_KEY_PROD -R jpatrickb/practice-buddy
 ```
 
 ### 4. Delete the stray Worker from the earlier preview experiment
 
-A `practice-buddy-preview` Worker was created before the dev/prod model. Remove it once:
+A `practice-buddy-preview` Worker was created before the dev/prod model. Remove it once, either in the
+dashboard (Workers & Pages → practice-buddy-preview → Settings → Delete) or:
 
 ```sh
 pnpm exec wrangler delete --name practice-buddy-preview
@@ -118,12 +124,11 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    first (from `infra/` after `tofu init -backend-config=backend.hcl`; see `infra/backend.hcl.example`):
    `tofu import cloudflare_r2_bucket.content_dev <ACCOUNT_ID>/practice-buddy-content-dev/default`
    (and `.content` / `practice-buddy-content` for prod).
-2. Set the cookie signing key (ADR-0006). Use a long random value; rotating it logs everyone out (they just
-   re-open their link). The Worker answers HTTP 500 until a key of at least 32 chars exists.
-   Use a **different key per environment** so dev cookies are worthless against prod:
-   ```sh
-   openssl rand -hex 32 | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --name practice-buddy-dev
-   ```
+2. The cookie signing key (ADR-0006) is deployed by the workflow from the GitHub secret
+   `COOKIE_SIGNING_KEY_DEV` (set in step 3 above), so there is nothing to do here. Rotating it logs
+   everyone out (they just re-open their link). The Worker answers HTTP 500 without a key of at least 32 chars.
+   PR preview versions are uploaded to the dev Worker and inherit its secrets (secrets are Worker-level
+   and carry over to new versions; not verified against the real account yet).
 3. Create the first dev choir and link (until the `choir` CLI exists). You need a song manifest and audio
    in the dev bucket too; for a smoke test use `pnpm seed`-style fake content, or just an empty choir:
    ```sh
@@ -144,10 +149,8 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 
 4. Merge `develop` → `main` (PR + approval). `deploy.yml` deploys `practice-buddy` to
    `practice.jpatrickbeal.com`.
-5. Set its key, then repeat step 3 against `practice-buddy-content` (id/label of your choice):
-   ```sh
-   openssl rand -hex 32 | pnpm exec wrangler secret put COOKIE_SIGNING_KEY --name practice-buddy
-   ```
+5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the choir step above against
+   `practice-buddy-content` (id/label of your choice).
 
 ## What the workflows do
 
@@ -164,7 +167,7 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
 
 | Permission | Needed for |
 |---|---|
-| Account · Workers Scripts · Edit | `wrangler deploy`, `wrangler versions upload`, `wrangler secret put` |
+| Account · Workers Scripts · Edit | `wrangler deploy` (incl. `--secrets-file`), `wrangler versions upload` |
 | Account · Workers R2 Storage · Edit | `tofu apply` creating/updating the R2 buckets; wrangler R2 bindings on deploy |
 | Account · Account Settings · Read | wrangler resolving the account / workers.dev subdomain |
 | Zone · Workers Routes · Edit | attaching the custom domain `practice.jpatrickbeal.com` on deploy |
