@@ -34,7 +34,7 @@ CI fails on formatting.
 
 - `develop` is the default branch. Branch from it (`ws-x/short-name`) and open PRs **into `develop`**.
 - Releases: a PR `develop` → `main`. Merging to `main` deploys production; merging to `develop` deploys dev.
-- Branch protection on both: PR required, **`ci / checks`, `ci / infra`, `ci / e2e`** must pass, branch must be
+- Branch protection is **applied** on `develop` and `main`: PR required, **`ci / checks`, `ci / infra`, `ci / e2e`** must pass, branch must be
   up to date (strict). **0 required approvals**, because every PR is authored under the architect's GitHub
   account and GitHub does not let you approve your own PR. The architect approves in chat; the tech lead merges.
 - Every PR gets CI plus a **preview**: the workflow uploads a `pr-<n>` version of the dev Worker and comments the
@@ -67,10 +67,8 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 
 - **Never commit audio**, GarageBand projects, real manifests or links. Generate fixtures at test time.
 - **AudioWorklet needs a secure context**: `localhost` or https. A phone on your LAN over plain `http://<ip>:5173`
-  will not play. Test on phones with a PR preview or the dev site (both https). (`pnpm dev:https`, mentioned in
-  older notes, does not exist.)
+  will not play. Test on phones with a PR preview or the dev site (both https).
 - Browsers only start audio from a tap/click; call `play()` from a user gesture (iOS especially).
-- **`ls` may hang in agent shells** (shell alias). Use `command ls`, `find` or `stat`.
 - Don't hard-code SATB or part counts; labels and `kind` come from the manifest.
 - Never `wrangler deploy` to production by hand; deploys are Actions only. `pnpm choir ... --env prod` changes
   live content and asks for confirmation.

@@ -35,6 +35,7 @@ Open the link `pnpm seed` prints: http://localhost:5173/c/dev-choir/dev-token-de
 | `pnpm dev` | Vite dev server running the SPA and the real Worker against local R2 |
 | `pnpm build` / `pnpm preview` | Production build / serve the build |
 | `pnpm seed` | Generate the fake song and dev choir into local R2 (needs ffmpeg) |
+| `pnpm test:watch` | Vitest in watch mode (Workers pool) |
 | `pnpm test` | Unit tests: Worker/shared in the Workers runtime, then CLI/web logic in Node |
 | `pnpm test:e2e` | Playwright end-to-end tests (seeds, starts the dev server on port 5273) |
 | `pnpm lint` · `pnpm format` · `pnpm format:check` · `pnpm typecheck` | ESLint · Prettier write/check · `tsc -b` |
@@ -48,6 +49,7 @@ Open the link `pnpm seed` prints: http://localhost:5173/c/dev-choir/dev-token-de
 | Set up, test, branch, open a PR | [docs/development.md](docs/development.md) |
 | Add or remove a song, make or revoke a choir link | [docs/adding-songs.md](docs/adding-songs.md) |
 | Deploy, bootstrap Cloudflare, understand CI | [docs/deploy.md](docs/deploy.md) |
+| Roll back a bad release or handle an incident | [docs/deploy.md#rollback-and-incidents](docs/deploy.md#rollback-and-incidents) |
 | See why a decision was made | [docs/adr/](docs/adr/README.md) |
 | Work on the audio engine | [src/web/audio/README.md](src/web/audio/README.md) |
 | See what is done and what is next | [docs/roadmap.md](docs/roadmap.md) |

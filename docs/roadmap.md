@@ -1,6 +1,6 @@
 # Roadmap
 
-**1.0 was released on 2026-11-09** (PR #13, `develop` → `main`): https://practice.jpatrickbeal.com
+**1.0 was released on 2026-11-09 (UTC)** (PR #13, `develop` → `main`): https://practice.jpatrickbeal.com
 
 ## Phase 0: Foundations ✅ (2026-11-08)
 - Repo, CLAUDE.md, ADRs 0001–0011, roadmap.

@@ -122,7 +122,22 @@ Two different things:
   from every choir and delete it in one go. It cannot be undone: to bring the song back, upload it again
   with `add-song`. If it is interrupted (e.g. the network drops), just run the same command again.
 
-## 7. Troubleshooting
+## 7. Options at a glance
+
+| Option | Applies to | Meaning |
+|---|---|---|
+| `--env local\|dev\|prod` | all | Where to work (default `dev`) |
+| `--yes` | all | Skip the "Upload to PRODUCTION?" question (e.g. scripted prod runs). For `delete-song` on prod it also skips typing the song id: use with care |
+| `--dry-run` | `add-song`, `delete-song` | Do everything except upload / delete |
+| `--allow-lossy` | `add-song` | Accept MP3/AAC sources (not recommended) |
+| `--name "..."` | `add-choir` | The choir's display name (required) |
+| `--label "..."` | `new-link` | A name for the link, used later by `revoke-link` (default: `link <date>`) |
+| `--from-all-choirs` | `delete-song` | Remove the song from every choir, then delete it |
+| `--force` | `init-song` | Overwrite an existing `song.yaml` |
+
+`pnpm choir help` prints the same list.
+
+## 8. Troubleshooting
 
 | You see | What to do |
 |---|---|

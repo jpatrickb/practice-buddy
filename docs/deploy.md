@@ -78,9 +78,9 @@ gh run watch -R jpatrickb/practice-buddy
 `practice-buddy-tfstate` if missing, and deletes the stray `practice-buddy-preview` Worker from the
 earlier preview experiment if it exists.
 
-### 4. Branch protection (recommended; not applied by this repo)
+### 4. Branch protection
 
-Require a PR and passing CI on both branches. Approvals are set to 0 because the architect is the only
+This is applied on `develop` and `main` (summary in [development.md](development.md#branches-prs-and-releases)); the snippet below is how to reproduce it. It requires a PR and passing CI on both branches. Approvals are set to 0 because the architect is the only
 human and all PRs are authored under their account (GitHub does not let you approve your own PR); the
 architect's approval is given to the tech lead, who merges.
 
@@ -134,28 +134,22 @@ A Worker must exist before it can hold a secret or receive preview versions, so 
    everyone out (they just re-open their link). The Worker answers HTTP 500 without a key of at least 32 chars.
    PR preview versions are uploaded to the dev Worker and inherit its secrets (secrets are Worker-level
    and carry over to new versions; not verified against the real account yet).
-3. Create the first dev choir and link (until the `choir` CLI exists). You need a song manifest and audio
-   in the dev bucket too; for a smoke test use `pnpm seed`-style fake content, or just an empty choir:
+3. Upload a song and create the first choir and link with the CLI (it uses your `wrangler login`, no extra
+   tokens); the commands are in [adding-songs.md](adding-songs.md):
    ```sh
-   TOKEN=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')     # 32 chars, base64url
-   HASH=$(printf %s "$TOKEN" | shasum -a 256 | cut -d' ' -f1)
-   cat > /tmp/dev-choir.json <<JSON
-   {"schemaVersion":1,"id":"dev-choir","name":"Dev Choir","songs":[],
-    "accessTokens":[{"sha256":"$HASH","label":"first dev link","createdAt":"$(date +%F)"}]}
-   JSON
-   pnpm exec wrangler r2 object put practice-buddy-content-dev/manifests/choirs/dev-choir.json \
-     --remote --file /tmp/dev-choir.json --content-type application/json
-   echo "https://practice-buddy-dev.<your-subdomain>.workers.dev/c/dev-choir/$TOKEN"
+   pnpm choir add-song <folder> --env dev
+   pnpm choir add-choir <choir-id> --name "<Display Name>" --env dev
+   pnpm choir add-song-to-choir <choir-id> <song-id> --env dev
+   pnpm choir new-link <choir-id> --label "Testing" --env dev
    ```
-   Open that link: you should land on the song list. Revoke a link by removing its entry from
-   `accessTokens` (effective within ~60 s).
+   Open the printed link: you should land on the song list. The link is shown only once.
 
 **Prod**
 
 4. Merge `develop` → `main` (PR). `deploy.yml` deploys `practice-buddy` to
    `practice.jpatrickbeal.com`.
-5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the choir step above against
-   `practice-buddy-content` (id/label of your choice).
+5. The key comes from `COOKIE_SIGNING_KEY_PROD`. Repeat the CLI steps from the dev section with `--env prod`
+   (see [adding-songs.md](adding-songs.md)).
 
 ## What the workflows do
 
@@ -186,11 +180,22 @@ Not needed by the token: the data in the content bucket (the Worker reads it thr
 > repo manages; they could not be exercised against the real account yet. If the first deploy fails
 > with a 403, the error names the missing permission. Add it and re-run the workflow.
 
-## Credentials needed later (not by this PR)
+## Credentials for the `choir` CLI
 
-The `choir` CLI (ADR-0007) uploads audio to R2 through the S3 API from the architect's Mac. That
-needs a *separate* R2 S3 token (Object Read & Write on the two content buckets), kept locally and
-never put in GitHub. It should have an `--env dev|production` choice (ADR-0007), matching the two buckets.
+No tokens are stored anywhere for the CLI. It runs wrangler with your own login: do `pnpm exec wrangler login`
+once on your Mac (see [adding-songs.md](adding-songs.md)). Alternatively set `CLOUDFLARE_API_TOKEN` to a
+short-lived API token limited to R2 for this account. Environments are `--env local|dev|prod`.
+
+## Rollback and incidents
+
+- **Standard:** revert the bad PR on `develop`, open a release PR `develop` → `main`, merge. CI plus deploy takes
+  about 3 minutes.
+- **Emergency only, with the architect's OK:** Cloudflare dashboard → Workers & Pages → `practice-buddy` →
+  Deployments → roll back to the previous version. Then open a revert PR so git matches what is live.
+- **Content problems** (wrong song, a link shared too widely) are fixed with the CLI, not a deploy:
+  `pnpm choir remove-song-from-choir`, `delete-song`, `revoke-link` ([adding-songs.md](adding-songs.md)). They take
+  effect within about a minute.
+- Something looks wrong only on `*.workers.dev`? That is the dev Worker; production is unaffected.
 
 ## Local development
 

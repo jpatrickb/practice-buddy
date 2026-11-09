@@ -82,6 +82,7 @@ Part labels and counts are free-form: nothing assumes SATB.
 | Pages and routing | `src/web/App.tsx`, `src/web/pages/` (`Home`, `PlayerPage`) |
 | Player state (play, loop, mix, speed, persistence) | `src/web/player/usePlayer.ts`, `src/web/lib/{mixer,saved}.ts` |
 | Look and layout (Fusion theme, Tailwind v4, shadcn/Radix) | `src/web/components/`, `src/web/index.css` |
+| Adding light mode | `index.html` (color-scheme/theme-color), `src/web/index.css` tokens, `src/web/lib/partColors.ts` (darker part colors), `Cover.tsx`, `components/*`; needs an ADR-0011 amendment |
 | API calls from the SPA | `src/web/api/client.ts` (Zod-validated) |
 | Audio engine (stretch, sync, iOS quirks) | `src/web/audio/` (own [README](../src/web/audio/README.md)); `src/web/engine/` picks real vs mock |
 | Upload songs, choirs, links, delete | `tools/cli/` (`commands.ts` logic, `storage.ts` wrangler layer) |
