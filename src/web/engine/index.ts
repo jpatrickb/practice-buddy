@@ -1,20 +1,20 @@
+import { createEngine as createRealEngine, EngineError } from '../audio';
 import { MockEngine } from './mock';
 import type { PracticeEngine } from './types';
 
-export type { PartSource, PracticeEngine } from './types';
+export { EngineError };
+export type { LoadOptions, PartSource, PracticeEngine } from './types';
 
-/**
- * Engine factory.
- * TODO(WS-A): when src/web/audio lands, import its `createEngine` here and make it the default:
- *   import { createEngine as createRealEngine } from '../audio';
- * The mock stays available for e2e/dev via VITE_MOCK_ENGINE=1.
- */
-const createRealEngine: (() => PracticeEngine) | null = null;
-
-export const usingMockEngine =
-  createRealEngine === null || import.meta.env.VITE_MOCK_ENGINE === '1';
+/** Dev/test flag: build or run with VITE_MOCK_ENGINE=1 to use the silent timer-driven mock. */
+export const usingMockEngine = import.meta.env.VITE_MOCK_ENGINE === '1';
 
 export function createEngine(hint: { durationSec: number }): PracticeEngine {
-  if (!usingMockEngine && createRealEngine) return createRealEngine();
-  return new MockEngine(hint.durationSec);
+  return usingMockEngine ? new MockEngine(hint.durationSec) : createRealEngine();
+}
+
+/** A message that is safe to show to a non-technical user. */
+export function friendlyMessage(e: unknown): string {
+  return e instanceof EngineError
+    ? e.userMessage
+    : 'Something went wrong with the audio. Please try again.';
 }

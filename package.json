@@ -17,9 +17,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run && vitest run -c vitest.cli.config.ts",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
     "seed": "tsx scripts/seed-local.ts",
     "choir": "tsx tools/cli/index.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

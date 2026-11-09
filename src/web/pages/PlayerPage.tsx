@@ -26,12 +26,11 @@ function LoadingPanel({ loaded, total }: { loaded: number; total: number }) {
       <p role="status" className="font-bold">
         Getting your song ready…
       </p>
-      <p className="mb-3 text-sm text-muted-foreground">
-        {loaded} of {total} parts
-      </p>
+      <p className="mb-3 text-sm text-muted-foreground">{pct}%</p>
       <div
         role="progressbar"
         aria-label="Loading the song"
+        aria-valuetext={`${pct}%`}
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={loaded}
@@ -89,8 +88,8 @@ function PlayerScreen({ song, retry }: { song: SongManifest; retry: () => void }
             )}
             {p.load.status === 'error' && (
               <Panel>
-                <p className="font-bold">We couldn’t load the audio.</p>
-                <p className="mb-3 text-muted-foreground">Check your connection and try again.</p>
+                <p className="font-bold">We couldn’t play this song.</p>
+                <p className="mb-3 text-muted-foreground">{p.load.message}</p>
                 <Button variant="default" onClick={retry}>
                   Try again
                 </Button>

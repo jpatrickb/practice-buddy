@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SongManifest } from '../../shared';
-import { createEngine, type PracticeEngine } from '../engine';
+import { createEngine, friendlyMessage, type PracticeEngine } from '../engine';
 import {
   effectiveGains,
   isAccompaniment,
@@ -19,7 +19,9 @@ export interface Loop {
 }
 
 export type LoadState =
-  { status: 'loading'; loaded: number; total: number } | { status: 'ready' } | { status: 'error' };
+  | { status: 'loading'; loaded: number; total: number }
+  | { status: 'ready' }
+  | { status: 'error'; message: string };
 
 export function usePlayer(song: SongManifest) {
   const parts = useMemo(() => [...song.parts].sort((a, b) => a.order - b.order), [song]);
@@ -49,17 +51,22 @@ export function usePlayer(song: SongManifest) {
     const off = [
       engine.on('statechange', () => setPlaying(engine.playing)),
       engine.on('ended', () => setTime(0)),
-      engine.on('error', () => setLoad({ status: 'error' })),
+      engine.on('error', (e) => setLoad({ status: 'error', message: friendlyMessage(e) })),
     ];
     let live = true;
     engine
       .load(
         parts.map((p) => ({ id: p.id, url: `/${p.file}`, defaultGain: p.defaultGain })),
         (loaded, total) => live && setLoad({ status: 'loading', loaded, total }),
+        {
+          durationSamples: song.durationSamples,
+          sampleRate: song.sampleRate,
+          durationSec: song.durationSec,
+        },
       )
       .then(
         () => live && setLoad({ status: 'ready' }),
-        () => live && setLoad({ status: 'error' }),
+        (e: unknown) => live && setLoad({ status: 'error', message: friendlyMessage(e) }),
       );
     const poll = setInterval(() => setTime(engine.currentTime()), 100);
     return () => {
