@@ -2,7 +2,7 @@ import SignalsmithStretch from 'signalsmith-stretch';
 import type { LoadOptions, PartSource, PracticeEngine } from './engine-api';
 import { EngineError, friendly, httpError } from './errors';
 import { enterPlaybackSession, leavePlaybackSession, resumeOnGesture } from './ios';
-import { fitToLength, targetSamples } from './length';
+import { downmixToMono, fitToLength, targetSamples } from './length';
 import { clampRate, Timeline } from './timeline';
 
 /** ADR-0002: decode at 24 kHz (≈123 MB for a 6-part song instead of 226 MB at 44.1 kHz). */
@@ -91,7 +91,12 @@ class SignalsmithEngine implements PracticeEngine {
         const data = await pending;
         if (this.disposed) return;
         const buf = await this.ctx.decodeAudioData(data);
-        decoded.push(buf.getChannelData(0).slice()); // copy out, then let the AudioBuffer go
+        // mono mix (stereo parts are summed to mono), then let the AudioBuffer go
+        decoded.push(
+          downmixToMono(
+            Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c)),
+          ),
+        );
         step();
       }
       // A rejected sibling fetch must not be left unhandled.

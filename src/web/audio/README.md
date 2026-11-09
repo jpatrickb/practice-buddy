@@ -25,6 +25,7 @@ Only change from the spike contract: `load` takes an optional third argument `Lo
 
 - **Song length** is the manifest value, never the decoded buffer length. WebKit leaves extra AAC tail samples (ADR-0003 amendment).
   Parts are trimmed or zero-padded at the tail only, so alignment is never shifted.
+- **Stereo parts** (`channels: 2` in the manifest) are downmixed to mono at decode, (L+R)/2. Per-part stereo playback is out of scope for the MVP.
 - `setLoop` while the playhead is already past `end` jumps to `start`.
 - `statechange` fires on load, play, pause, seek-while-paused and end. Poll `currentTime()` (e.g. via rAF) for the scrubber.
 - `error` and a rejected `load()` carry an `EngineError` (`code`, `userMessage`).

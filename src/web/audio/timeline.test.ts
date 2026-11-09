@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitToLength, targetSamples } from './length';
+import { downmixToMono, fitToLength, targetSamples } from './length';
 import { clampRate, Timeline } from './timeline';
 
 describe('Timeline', () => {
@@ -109,5 +109,20 @@ describe('song length', () => {
     const src = Float32Array.from([1, 2, 3, 4, 5]);
     expect([...fitToLength(src, 3)]).toEqual([1, 2, 3]);
     expect([...fitToLength(src, 7)]).toEqual([1, 2, 3, 4, 5, 0, 0]);
+  });
+
+  it('downmixes stereo to (L+R)/2 and keeps mono as a copy', () => {
+    const l = Float32Array.from([1, 0, -1]);
+    const r = Float32Array.from([0, 1, -1]);
+    expect([...downmixToMono([l, r])]).toEqual([0.5, 0.5, -1]);
+    const mono = downmixToMono([l]);
+    expect([...mono]).toEqual([1, 0, -1]);
+    expect(mono).not.toBe(l);
+  });
+
+  it('downmixes 3+ channels by averaging', () => {
+    const c = (v: number) => Float32Array.from([v, v]);
+    expect([...downmixToMono([c(3), c(0), c(0)])]).toEqual([1, 1]);
+    expect(downmixToMono([]).length).toBe(0);
   });
 });

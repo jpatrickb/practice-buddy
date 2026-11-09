@@ -23,3 +23,15 @@ export function fitToLength(src: Float32Array, len: number): Float32Array {
   out.set(len >= src.length ? src : src.subarray(0, len));
   return out;
 }
+
+/** Mono mix of a decoded part: (L+R)/2 for stereo, the average of all channels for 2+. Always a fresh array. */
+export function downmixToMono(channels: Float32Array[]): Float32Array {
+  const first = channels[0];
+  if (!first) return new Float32Array(0);
+  if (channels.length === 1) return first.slice();
+  const out = new Float32Array(first.length);
+  for (const ch of channels) for (let i = 0; i < out.length; i++) out[i]! += ch[i] ?? 0;
+  const k = 1 / channels.length;
+  for (let i = 0; i < out.length; i++) out[i]! *= k;
+  return out;
+}
