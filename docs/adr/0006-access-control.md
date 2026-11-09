@@ -17,3 +17,9 @@ Copyrighted arrangements (e.g. Rutter/OUP). Access is for choir members only. Us
 - Anyone who has the link has access. Mitigated by rotating the link (a CLI command).
 - Not legal advice: members should own the printed music. Rehearsal tracks are for private practice.
 - If we ever need identity checks (more choirs or conductors), add Cloudflare Access email OTP (free up to 50 users).
+
+## Implementation notes (2026-11-08, PR #2)
+- Cookie name `__Host-pb_grants` (the `__Host-` prefix blocks cookie injection from subdomains).
+- Unauthorised audio requests return **404** (not 403). Only files named in a granted song's manifest are served. The API returns 401 `no_access`.
+- Manifests are cached **in memory for 60 s** per isolate rather than via the Cache API. Revocation can take up to ~60 s.
+- Links do not expire automatically; the architect rotates them by hand. Grants last 365 days.

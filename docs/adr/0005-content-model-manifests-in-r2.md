@@ -18,6 +18,7 @@ Song manifest (validated by Zod in `src/shared/`):
   "title": "Candlelight Carol",
   "credits": "John Rutter",
   "durationSec": 213.3,
+  "durationSamples": 9404805,
   "sampleRate": 44100,
   "parts": [
     { "id": "organ", "label": "Organ", "file": "audio/candlelight-carol/organ.ab12cd34ef56.m4a",
